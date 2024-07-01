@@ -1,0 +1,368 @@
+{
+	// Place your snippets for python here. Each snippet is defined under a snippet name and has a prefix, body and 
+	// description. The prefix is what is used to trigger the snippet and the body will be expanded and inserted. Possible variables are:
+	// $1, $2 for tab stops, $0 for the final cursor position, and ${1:label}, ${2:another} for placeholders. Placeholders with the 
+	// same ids are connected.
+	// Example:
+	// "Print to console": {
+	// 	"prefix": "log",
+	// 	"body": [
+	// 		"console.log('$1');",
+	// 		"$2"
+	// 	],
+	// 	"description": "Log output to console"
+	// }
+	
+		"Import Common Libraries": {
+			"prefix": "imp_libs",
+			"body": [
+				"import matplotlib.pyplot as plt",
+				"import pandas as pd",
+				"import numpy as np"
+			],
+			"description": "Import Matplotlib, Pandas, and NumPy libraries"
+		},
+		"For Loop": {
+			"prefix": "for",
+			"body": [
+				"for ${1:item} in ${2:collection}:",
+				"    ${3:pass}"
+			],
+			"description": "Basic for loop"
+		},
+		"While Loop": {
+			"prefix": "while",
+			"body": [
+				"while ${1:condition}:",
+				"    ${2:pass}"
+			],
+			"description": "Basic while loop"
+		},
+		"Function Definition": {
+			"prefix": "def",
+			"body": [
+				"def ${1:function_name}(${2:args}):",
+				"    \"\"\"${3:docstring}\"\"\"",
+				"    ${4:pass}"
+			],
+			"description": "Define a function"
+		},
+		"List Comprehension": {
+			"prefix": "list",
+			"body": [
+				"[${1:expression} for ${2:item} in ${3:collection}]"
+			],
+			"description": "List"
+		},
+		"Import Pandas": {
+			"prefix": "imp_pandas",
+			"body": [
+				"import pandas as pd"
+			],
+			"description": "Import Pandas library"
+		},
+		"Read CSV": {
+			"prefix": "read_csv",
+			"body": [
+				"${1:df} = pd.read_csv('${2:path_to_file}')"
+			],
+			"description": "Read a CSV file into a DataFrame"
+		},
+		"DataFrame head": {
+			"prefix": "head",
+			"body": [
+				"${1:df}.head(${2:n})"
+			],
+			"description": "Get the first n rows of a DataFrame"
+		},
+		"DataFrame describe": {
+			"prefix": "describe",
+			"body": [
+				"${1:df}.describe()"
+			],
+			"description": "Generate descriptive statistics of a DataFrame"
+		},
+
+		"Import Matplotlib": {
+			"prefix": "imp_matplotlib",
+			"body": [
+				"import matplotlib.pyplot as plt"
+			],
+			"description": "Import Matplotlib library"
+		},
+		"Save Figure": {
+			"prefix": "save_fig",
+			"body": [
+				"plt.savefig('${1:filename}')"
+			],
+			"description": "Save the current figure"
+		},
+		"Import NumPy": {
+        "prefix": "imp_numpy",
+        "body": [
+            "import numpy as np"
+        ],
+        "description": "Import NumPy library"
+    },
+    "Create Array": {
+        "prefix": "array",
+        "body": [
+            "${1:arr} = np.array([${2:elements}])"
+        ],
+        "description": "Create a NumPy array"
+    },
+    "Linspace": {
+        "prefix": "linspace",
+        "body": [
+            "${1:arr} = np.linspace(${2:start}, ${3:stop}, ${4:num})"
+        ],
+        "description": "Generate linearly spaced values"
+    },
+    "Arange": {
+        "prefix": "arange",
+        "body": [
+            "${1:arr} = np.arange(${2:start}, ${3:stop}, ${4:step})"
+        ],
+        "description": "Generate values within a specified range"
+    },
+	"Read Excel": {
+        "prefix": "read_excel",
+        "body": [
+            "${1:data} = pd.read_excel('${2:name.xlsx}')",
+        ],
+        "description": "Read Excel file"
+    },
+	"index": {
+        "prefix": "index_to_date",
+        "body": [
+            "${1:data}.index = pd.to_datetime(${2:data}['${3:Date}'])",
+        ],
+        "description": "Change the index to date time"
+	},
+	"dropna": {
+        "prefix": "dropna",
+        "body": [
+            "${1:data} = ${2:data}.dropna()"
+        ],
+        "description": "Drop NA"
+	},
+    "Rename Columns": {
+        "prefix": "rename_cols",
+        "body": [
+            "${1:data} = ${2:data}.rename(columns={'${3:old_name}': '${4:new_name}'})"
+        ],
+        "description": "Rename DataFrame columns"
+    },
+    "Concatenate DataFrames": {
+        "prefix": "concat_dfs",
+        "body": [
+            "${1:result} = pd.concat([${2:df1}, ${3:df2}], axis=${4:0})"
+        ],
+        "description": "Concatenate DataFrames"
+    },
+    "Merge DataFrames": {
+        "prefix": "merge_dfs",
+        "body": [
+            "${1:result} = pd.merge(${2:df1}, ${3:df2}, on='${4:key}', how='${5:inner}')"
+        ],
+        "description": "Merge DataFrames"
+    },
+    "Save to Excel": {
+        "prefix": "to_excel",
+        "body": [
+            "data.to_excel('${1:data.xlsx}', index=${2:True})"
+        ],
+        "description": "Save DataFrame to Excel file"
+    },
+    "Set Index": {
+        "prefix": "set_index",
+        "body": [
+            "data.set_index('${1:column_name}', inplace=${2:True})"
+        ],
+        "description": "Set DataFrame index"
+    },
+    "Interpolate DataFrame": {
+        "prefix": "interpolate",
+        "body": [
+            "${1:df} = ${1:df}.interpolate(method='${2:linear}', axis=${3:0}, limit_direction='${4:both}')"
+        ],
+        "description": "Interpolate DataFrame"
+    },
+    "Install Package": {
+        "prefix": "install_pkg",
+        "body": [
+            "!pip install ${1:package_name}"
+        ],
+        "description": "Install a Python package"
+    },
+    "Resample by Date": {
+        "prefix": "resample_by_date",
+        "body": [
+            "${1:data} = ${2:data}.resample('${3:M}').${4:sum}()"
+        ],
+        "description": "Resample DataFrame by date"
+    },
+    "Reset Index": {
+        "prefix": "reset_index",
+        "body": [
+            "data.reset_index(inplace=${1:True})"
+        ],
+        "description": "Reset DataFrame index"
+    },
+    "Save to Excel with Multiple Sheets": {
+        "prefix": "sheet_excel",
+        "body": [
+            "with pd.ExcelWriter('${1:data.xlsx}') as writer:",
+            "    ${2:df1}.to_excel(writer, sheet_name='${3:Sheet1}')",
+            "    ${4:df2}.to_excel(writer, sheet_name='${5:Sheet2}')"
+        ],
+        "description": "Save DataFrames to an Excel file with multiple sheets"
+    },
+    "Import Plotly": {
+        "prefix": "import_plotly",
+        "body": [
+            "import plotly.express as px"
+        ],
+        "description": "Import Plotly"
+    },
+    "Import Seaborn": {
+        "prefix": "import_seaborn",
+        "body": [
+            "import seaborn as sns"
+        ],
+        "description": "Import Seaborn"
+    },
+    "Filter DataFrame": {
+        "prefix": "filter_df",
+        "body": [
+            "${1:filtered} = ${2:data}[${4:data}['${5:column}'] ${6:==} ${7:value}]"
+        ],
+        "description": "Filter DataFrame"
+    },
+    "Install Libraries": {
+        "prefix": "install_libs",
+        "body": [
+            "!pip install ${1:library_name}"
+        ],
+        "description": "Install Python libraries"
+    },
+    "Format Date Index": {
+        "prefix": "index_format_date",
+        "body": [
+            "${1:data}.index = ${2:data}.index.strftime('${3:%d/%m/%Y}')"
+        ],
+        "description": "Format DataFrame date index"
+    },
+    "Drop First Column": {
+        "prefix": "drop_first_col",
+        "body": [
+            "${1:data}.drop(${2:data}.columns[0], axis=${3:1}, inplace=${4:True})"
+        ],
+        "description": "Drop the first column of DataFrame"
+    },
+    "Set Date Index": {
+        "prefix": "setdate_index",
+        "body": [
+            "${1:IndexPrice}.set_index('${2:Date}', inplace=${3:True})",
+            "${4:IndexPrice}.index = pd.to_datetime(${5:IndexPrice}.index).strftime('${6:%d/%m/%Y}')",
+            "${7:IndexPrice}.head()"
+        ],
+        "description": "Set and format date index"
+    },
+	"If Statement": {
+        "prefix": "if",
+        "body": [
+            "if ${1:condition}:",
+            "    ${2:pass}"
+        ],
+        "description": "If statement"
+    },
+    "Else Statement": {
+        "prefix": "else",
+        "body": [
+            "else:",
+            "    ${1:pass}"
+        ],
+        "description": "Else statement"
+    },
+    "If-Else Statement": {
+        "prefix": "ifelse",
+        "body": [
+            "if ${1:condition}:",
+            "    ${2:pass}",
+            "else:",
+            "    ${3:pass}"
+        ],
+        "description": "If-else statement"
+    },
+    "Elif Statement": {
+        "prefix": "elif",
+        "body": [
+            "elif ${1:condition}:",
+            "    ${2:pass}"
+        ],
+        "description": "Elif statement"
+    },
+    "If-Elif-Else Statement": {
+        "prefix": "ifelifelse",
+        "body": [
+            "if ${1:condition1}:",
+            "    ${2:pass}",
+            "elif ${3:condition2}:",
+            "    ${4:pass}",
+            "else:",
+            "    ${5:pass}"
+        ],
+        "description": "If-Elif-Else statement"
+    },
+	"Basic Plot": {
+        "prefix": "plot",
+        "body": [
+            "plt.plot(${1:x}, ${2:y}, label='${3:label}', color='${4:color}')",
+            "plt.xlabel('${5:x_label}')",
+            "plt.ylabel('${6:y_label}')",
+            "plt.title('${7:title}')",
+            "plt.legend()",
+            "plt.grid(${8:True})",
+            "plt.show()"
+        ],
+        "description": "Create a basic plot with Matplotlib"
+    },
+    "Scatter Plot": {
+        "prefix": "scatter",
+        "body": [
+            "plt.scatter(${1:x}, ${2:y}, label='${3:label}', color='${4:color}')",
+            "plt.xlabel('${5:x_label}')",
+            "plt.ylabel('${6:y_label}')",
+            "plt.title('${7:title}')",
+            "plt.legend()",
+            "plt.grid(${8:True})",
+            "plt.show()"
+        ],
+        "description": "Create a scatter plot with Matplotlib"
+    },
+	"Plotly Graph": {
+        "prefix": "plotly_graph",
+        "body": [
+            "fig = px.${1:scatter}(data_frame=${2:df}, x='${3:x_column}', y='${4:y_column}', title='${5:Title}', color='${6:color_column}', labels={'${3:x_column}': '${7:x_label}', '${4:y_column}': '${8:y_label}'})",
+            "fig.update_layout(legend_title='${9:Legend}', xaxis_title='${7:x_label}', yaxis_title='${8:y_label}', title='${5:Title}', title_x=0.5, showlegend=${10:True})",
+            "fig.show()"
+        ],
+        "description": "Create a Plotly graph"
+    },
+	"Seaborn Graph": {
+        "prefix": "sns_graph",
+        "body": [
+            "sns.${1:scatterplot}(data=${2:df}, x='${3:x_column}', y='${4:y_column}', hue='${5:hue_column}', style='${6:style_column}', palette='${7:palette}')",
+            "plt.xlabel('${8:x_label}')",
+            "plt.ylabel('${9:y_label}')",
+            "plt.title('${10:title}')",
+            "plt.legend(title='${11:Legend}')",
+            "plt.grid(${12:True})",
+            "plt.show()"
+        ],
+        "description": "Create a Seaborn graph"
+    }
+	
+	
+}
