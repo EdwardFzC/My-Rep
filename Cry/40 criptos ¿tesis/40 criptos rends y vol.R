@@ -34,15 +34,12 @@ assets <- gsub("_close", "", column_names)
     colnames(data_close) <- assets
     colnames(data_vol) <- assets
 
-# Revertir conversion la columna de fechas a index y viceversa
-data_close <- data_close %>% rownames_to_column(var = "date") # Establecer index como date
-    
 
 ################   
 # Función para calcular rendimientos logarítmicos
 calc_log_returns <- function(data) {
   log_returns <- data.frame(lapply(data, function(x) diff(log(x))))
-  rownames(log_returns) <- rownames(data)[-1] # Nuevo index y eliminar fila vacia
+  rownames(log_returns) <- rownames(data)[-1] # Nuevo index y eliminar fila vacía
   
   return(log_returns)
 }
@@ -51,11 +48,29 @@ lrends_1h <- calc_log_returns(data_close)
 
 # Rendimientos acumulados
 lcumrends_1h <- cumsum(lrends_1h)
-lcumrends_1h$date <- rownames(lcumrends_1h)
+lcumrends_1h <- lcumrends_1h %>% rownames_to_column(var = "date") # Establecer index como columna date
 
 
-plot(lcumrends_1h, main = "Rendimientos acumulados de 40 criptos")+
-legend("topright", col = rainbow(40), lwd = 0.5, cex = 0.8)
+# Convertir la columna 'date' a formato fecha
+lcumrends_1h$date <- as.POSIXct(lcumrends_1h$date, format="%Y-%m-%d %H:%M")
+
+plot(lcumrends_1h$date, lcumrends_1h$CRVUSDT, type = "l", col = "blue", xlab = "Fecha", ylab = "Rendimientos Acumulados", main = "Rendimientos Acumulados de CRVUSDT")
+
+ggplot(lcumrends_1h, aes(x=date,y=CRVUSDT))+
+  geom_line()
+
+
+
+assets
+
+# Crear la gráfica de líneas
+ggplot(lcumrends_1h_melt, aes(x = date, y = value, color = variable)) +
+  geom_line() +
+  labs(title = "Rendimientos Acumulados de los Activos",
+       x = "Fecha",
+       y = "Rendimientos Acumulados",
+       color = "Activos") +
+  theme_minimal()
 
 
 
