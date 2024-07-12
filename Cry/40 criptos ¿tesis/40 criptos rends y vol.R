@@ -4,7 +4,7 @@ library(plotly)
 library(xts)
 library(reshape2)
 library(tidyverse)
-
+library(gtools)
 ################
     # DATOS CRYPTO
 
@@ -154,14 +154,15 @@ dev_est_1h <- data.frame(lapply(lrends_1h[,-1], function(x) sd(x, na.rm = TRUE))
 var_1h <- data.frame(lapply(lrends_1h[,-1], function(x) var(x, na.rm = TRUE)))
 
 # Correlación
-corr_1h <- data.frame(cor(lrends_1h[,-1], use = "complete.obs"))
+corr_1h <- cor(lrends_1h[,-1], use = "complete.obs")
 
 # Covarianza
-covs_1h <- data.frame(cov(lrends_1h[,-1], use = "complete.obs"))
-
+covs_1h <- cov(lrends_1h[,-1], use = "complete.obs")
+#####
 # Rango
-rangos_1h <- data.frame(lapply(lrends_1h[,-1], function(x) range(x, na.rm = TRUE)))
+#rangos_1h <- data.frame(lapply(lrends_1h[,-1], function(x) range(x, na.rm = TRUE)))
 
+#####
 # Rangos chevishev
     # 68%
 chevi_68 <- data.frame(lapply(lrends_1h[,-1], function(x) c(mean(x, na.rm = TRUE) - 1 * sd(x, na.rm = TRUE), mean(x, na.rm = TRUE) + 1 * sd(x, na.rm = TRUE))))
@@ -193,7 +194,66 @@ chevi <- rbind(chevi, colMeans(chevi, na.rm = TRUE))
 
 
 ################
+    # ITERACIONES PARA PORTAFOLIOS
+data <- data.frame(date = as.Date("2022-01-01") + 0:4, 
+                                       stock1 = c(100, 105, 102, 110, 108), 
+                                       stock2 = c(50, 48, 52, 49, 51))
+
+# Funcion para iteraciones para portafolios markowitz con peso minimo, suma = 100% o 1
+comb_portfolio_mark <- function(assets, ncomb, wmin) { # REQUIERE GTOOLS
+  portfolios <- list()
+  wmax <- 1 - (length(assets)*wmin) # Obtener el maximo peso posible de acuerdo a numero de activos y su peso
+  for (i in 1:ncomb) {
+    # Obtener las iteraciones con una distribucion de Dirichlet y repetirlo por el numero de actvios
+    w <- rdirichlet(1, rep(1, length(assets)))[1, ] 
+    # Limitar los pesos entre el minimo y maximo para asegurar suma 1
+    w <- pmin(pmax(w, wmin), wmax) 
+    # Normalizar los pesos para que sumen 1 después del clipping
+    weights <- weights / sum(weights)
+    portfolios[[i]] <- weights
+  }
+  portfolios_df <- as.data.frame(do.call(rbind, portfolios))
+  colnames(portfolios_df) <- assets
+  
+  return(portfolios_df)
+}
+
+
+################
+    # RENDIMIENTOS Y RIESGOS DE PORTAFOLIOS
+
+
+################  
+    # RATIO SHARPE
+
+
+################
+    # Portafolio de minima varianza Markowitz
+
+
+
+################
+    # Drowdown
+
+
+
+################
+    # Evolucion de inversion en periodo, comparado con el activo de mayor y menor rentabilidad final de los activos
+
+
+
+################
     # GRAFICAS
+
+# Funcion de graficacion scatter
+
+# Funcion de graficacion Drowdown
+
+# Funcion de graficacion de rendimientos acumulados
+
+
+################
+    # EXPORTAR DATOS A CSV o EXCEL
 
 
 ggplot(lrends_1h, aes(x = BTC)) +
