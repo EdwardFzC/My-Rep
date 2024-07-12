@@ -6,7 +6,7 @@ library(reshape2)
 library(tidyverse)
 
 ################
-    # DATOS CRIPTOS
+    # DATOS CRYPTO
 
 # Lectura de datos
 data_raw <- data.frame(read_csv("crypto.csv/crypto.csv"))
@@ -21,8 +21,6 @@ data <- filter(data_raw, date>= start_date)
 #month(data$date[1])
 #day(data$date[1])
 
-# la funcion para eliminar espacios es str_trim, esta funcion recibe como argumento el vector de caracteres que se quiere limpiar
-
 
 ################
     # PREPARACIÓN DE DATOS
@@ -32,20 +30,22 @@ data_price <- data %>% select(!contains("volume"))
 data_close <- data_price %>% select(date, contains("close"))
 data_vol <- data %>% select(date, contains("volume"))
 
-# Función renombrar columnas eliminando el sufijo "_close y _volume" y crear variable con nombres de activos
+# Función renombrar columnas eliminando el sufijo "USDT_close u otros" y crear variable con nombres de activos
 get_assets <- function(data, suffix="USDT_close") {
   column_names <- colnames(data_close)
   assets <- gsub("USDT_close", "", column_names)
   return(assets)
 }
 
+# Obtener el nombre de los activos usados
 assets <- get_assets(data_close)
+# Cambiar el nombre de columnas en Data frames para coincidir con los activos
+
 colnames(data_close) <- get_assets(data_close)
 colnames(data_vol) <- get_assets(data_vol,"USDT_volume")
 
 # Crear un dataframe con los volúmenes en USD
 data_vol_usd <- data.frame(date=data_vol$date, mapply(function(vol, close) vol * close, data_vol[-1], data_close[-1]))
-#colnames(volumes_usd) <- colnames(data_vol)[-1]
 
 
 ################
@@ -56,7 +56,13 @@ calc_log_returns <- function(data) {
   log_returns <- data.frame(date= data$date[-1], lapply(data[,-1], function(x) diff(log(x))))
   return(log_returns)
 }
-    
+
+# funcion para rendimientos en cambio porcentual
+calc_pct_returns <- function(data) {
+  pct_returns <- data.frame(date= data$date[-1], lapply(data[,-1], function(x) diff(x)/x[-length(x)]))
+  return(pct_returns)
+}
+
 # Función para calcular rendimientos acumulados
 calc_acum_returns <- function(data) {
   acum_rends <- data.frame(date= data$date, lapply(data[,-1], function(x) cumsum(x)))
@@ -64,7 +70,7 @@ calc_acum_returns <- function(data) {
 
 
 ################
-    # FUNCIONES DE CAMBIO DE TEMPORALIDAD
+    # FUNCION DE CAMBIO DE TEMPORALIDAD
 
  # Función para cambiar de temporalidad (usando XTS)
 change_timeframe <- function(data, timeframe, sum=FALSE) {
