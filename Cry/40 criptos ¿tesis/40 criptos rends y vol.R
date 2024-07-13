@@ -5,11 +5,12 @@ library(xts)
 library(reshape2)
 library(tidyverse)
 library(gtools)
+library(GGally)
 ################
     # DATOS CRYPTO
 
 # Lectura de datos
-data_raw <- data.frame(read_csv("crypto.csv/crypto.csv"))
+data_raw <- data.frame(read_csv("1Weas/Github/My-Rep/Cry/40 criptos ¿tesis/crypto.csv/crypto.csv"))
 
 # Filtrar los datos entre 31 de diciembre de 2020 a las 23:00 y la fecha más reciente
 data_raw$date <- as.POSIXct(data_raw$date, format="%d/%m/%Y %H:%M") # cosa rara se establece formato al revés
@@ -20,6 +21,9 @@ data <- filter(data_raw, date>= start_date)
 #year(data$date[1])
 #month(data$date[1])
 #day(data$date[1])
+
+
+
 
 
 ################
@@ -48,6 +52,10 @@ colnames(data_vol) <- get_assets(data_vol,"USDT_volume")
 data_vol_usd <- data.frame(date=data_vol$date, mapply(function(vol, close) vol * close, data_vol[-1], data_close[-1]))
 
 
+
+
+
+
 ################
     # FUNCIÓN PARA CALCULAR RENDIMIENTOS
 
@@ -67,6 +75,10 @@ calc_pct_returns <- function(data) {
 calc_acum_returns <- function(data) {
   acum_rends <- data.frame(date= data$date, lapply(data[,-1], function(x) cumsum(x)))
 }
+
+
+
+
 
 
 ################
@@ -118,6 +130,10 @@ change_timeframe <- function(data, timeframe, sum=FALSE) {
 #     apply           |  Aplica una función a las filas o columnas de una matriz
 #     custom_function |  Cualquier función personalizada definida por el usuario
 
+
+
+
+
 ################
     # RENDIMIENTOS MULIPLE TIME FRAME
 
@@ -129,11 +145,19 @@ vol_day1 <- change_timeframe(data_vol_usd, "day", sum=TRUE)
 lrends_1h <- calc_log_returns(data_close)
 
 
+
+
+
+
 ################
   #RENDIMIENTOS ACUMULADOS
 
 # horarios
 lcumrends_1h <- calc_acum_returns(lrends_1h)
+
+
+
+
 
 
 ################
@@ -142,10 +166,14 @@ lcumrends_1h <- calc_acum_returns(lrends_1h)
 # Horario
 lcumrends_1h_melt <- melt(lcumrends_1h, id.vars = "date")
 
+
+
+
+
 ################
     # ESTADÍSTICOS
 # Media
-medias_1h <- data.frame(lapply(lrends_1h[,-1], function(x) mean(x, na.rm = TRUE)))
+medias_1h <- colMeans(lrends_1h[,-1], na.rm = TRUE)
 
 # Desviacion estandar
 dev_est_1h <- data.frame(lapply(lrends_1h[,-1], function(x) sd(x, na.rm = TRUE)))
@@ -187,30 +215,44 @@ chevi <- as.data.frame(t(chevi))
 chevi <- rbind(chevi, colMeans(chevi, na.rm = TRUE))
 # cambiar el nombre de la nueva fila y moverla al inicio
 
+
+
+
+
+
+
+
+
+
+
+
 ################
     # VOLATILIDAD
 
 # Función para calcular la volatilidad
 
 
+
+
+
+
 ################
     # ITERACIONES PARA PORTAFOLIOS
-data <- data.frame(date = as.Date("2022-01-01") + 0:4, 
-                                       stock1 = c(100, 105, 102, 110, 108), 
-                                       stock2 = c(50, 48, 52, 49, 51))
 
 # Funcion para iteraciones para portafolios markowitz con peso minimo, suma = 100% o 1
 comb_portfolio_mark <- function(assets, ncomb, wmin) { # REQUIERE GTOOLS
   portfolios <- list()
   wmax <- 1 - (length(assets)*wmin) # Obtener el maximo peso posible de acuerdo a numero de activos y su peso
+
   for (i in 1:ncomb) {
     # Obtener las iteraciones con una distribucion de Dirichlet y repetirlo por el numero de actvios
     w <- rdirichlet(1, rep(1, length(assets)))[1, ] 
     # Limitar los pesos entre el minimo y maximo para asegurar suma 1
     w <- pmin(pmax(w, wmin), wmax) 
     # Normalizar los pesos para que sumen 1 después del clipping
-    weights <- weights / sum(weights)
-    portfolios[[i]] <- weights
+    sum_w <- sum(w)
+    w <- w / sum_w
+    portfolios[[i]] <- w
   }
   portfolios_df <- as.data.frame(do.call(rbind, portfolios))
   colnames(portfolios_df) <- assets
@@ -219,16 +261,124 @@ comb_portfolio_mark <- function(assets, ncomb, wmin) { # REQUIERE GTOOLS
 }
 
 
-################
-    # RENDIMIENTOS Y RIESGOS DE PORTAFOLIOS
 
-
-################  
-    # RATIO SHARPE
 
 
 ################
-    # Portafolio de minima varianza Markowitz
+    # METRICAS DE PORTAFOLIOS (Rendimiento esperado, Varianza, Riesgo, Ratio de Sharpe)
+
+# Rendimientos esperdos del portafolio
+rend_esp <- function(portfolios, data_rends) {
+  rend_esp <- numeric(nrow(portfolios))
+  media_rends <- colMeans(rends)
+  
+  for (i in 1:nrow(portfolios)) {
+    row <- as.numeric(portfolios[i, ])
+    
+    rend_esp[i] <- sum(row * media_rends)
+  }
+  rend_esp <- data.frame(rend_esp=rend_esp)
+  return(rend_esp)
+}
+
+
+
+# Varianza del portafolio
+var_port <- function(portfolios, data_rends) {
+  cov_rends <- cov(rends)
+  var_port <- numeric(nrow(portfolios))
+  
+  for (i in 1:nrow(portfolios)) {
+    row <- as.numeric(portfolios[i, ])
+    
+    var_port[i] <- t(row) %*% cov_rends %*% row
+  }
+  var_port <- data.frame(var_port=var_port)
+  return(var_port)
+}
+
+
+
+# Riesgo del portafolio
+risk_port <- function(portfolios) {
+  risk <- numeric(nrow(portfolios))
+  cov_rends <- cov(rends)
+  var_port <- numeric(nrow(portfolios))
+  
+  for (i in 1:nrow(portfolios)) {
+    row <- as.numeric(portfolios[i, ])
+    
+    var_port[i] <- t(row) %*% cov_rends %*% row
+    risk <- numeric(nrow(portfolios))
+    
+  }
+  risk <- data.frame(risk=risk)
+  return(risk)
+}
+
+
+
+# Ratio sharpe
+ratio_sharpe <- function(portfolios, risk_free_rate = 0.1) {
+  ratio_sharpe <- numeric(nrow(portfolios))
+  rend_esp <- rend_esp(portfolios)
+  risk <- risk_port(portfolios)
+  for (i in 1:nrow(portfolios)) {
+    ratio_sharpe[i] <- (rend_esp[i] - risk_free_rate) / risk[i]
+  }
+  ratio_sharpe <- data.frame(ratio_sharpe=ratio_sharpe)
+  return(ratio_sharpe)
+}
+
+
+
+# Funcion para metricas
+portfolio_metrics <- function(portfolios, rends, risk_free_rate = 0.1) {
+  media_rends <- colMeans(rends) 
+  cov_rends <- cov(rends)
+  
+  rend_esp <- numeric(nrow(portfolios))
+  risk <- numeric(nrow(portfolios))
+  var_port <- numeric(nrow(portfolios))
+  ratio_sharpe <- numeric(nrow(portfolios))
+  
+  for (i in 1:nrow(portfolios)) {
+    row <- as.numeric(portfolios[i, ])
+    
+    rend_esp[i] <- sum(row * media_rends)
+    var_port[i] <- t(row) %*% cov_rends %*% row
+    risk[i] <- sqrt(var_port[i])
+    ratio_sharpe[i] <- (rend_esp[i] - risk_free_rate) / risk[i]
+  }
+  portfolios <- portfolios
+  portfolios$rend_esp <- rend_esp
+  portfolios$var_port <- var_port
+  portfolios$risk <- risk
+  portfolios$ratio_sharpe <- ratio_sharpe
+  return(portfolios)
+}
+
+
+
+# Funcion para Portafolio, iteraciones y metricas
+portfolio_markowitz <- function(data , nport, wmin, risk_free=0.1) {
+  assets <- colnames(data)
+  portfolios <- comb_portfolio_mark(assets, nport, wmin)
+  metrics <- portfolio_metrics(portfolios, data, risk_free)
+  return(metrics)
+  }
+
+
+
+
+################
+    # OPTIMIZACION DE PORTAFOLIOS
+
+# Portafolio de pesos iguales
+
+# Portafolio de minima varianza Markowitz
+
+# Portafolio tangente
 
 
 
@@ -244,6 +394,35 @@ comb_portfolio_mark <- function(assets, ncomb, wmin) { # REQUIERE GTOOLS
 
 ################
     # GRAFICAS
+
+# Graficas de correlacion datos 1H
+corr <- cor(data_close[-1], use = "complete.obs")
+ggpairs(corr, 
+        columns = 1:10,
+        lower = list(continuous = "smooth"))+
+  labs(title = "Correlación de Precios de Cierre",
+       x = "Activos",
+       y = "Activos")+
+  theme_minimal()
+
+corr_log_rends <- cor(calc_log_returns(data_close)[-1], use = "complete.obs")
+ggpairs(corr_log_rends, 
+        columns = 1:10,
+        lower = list(continuous = "smooth"))+
+  labs(title = "Correlación de Rendimientos Logarítmicos Horarios",
+       x = "Activos",
+       y = "Activos")+
+  theme_minimal()
+
+corr_rends <- cor(calc_pct_returns(data_close)[-1], use = "complete.obs")
+ggpairs(corr_rends, 
+        columns = 1:10,
+        lower = list(continuous = "smooth"))+
+  labs(title = "Correlación de Rendimientos Porcentuales Horarias",
+       x = "Activos",
+       y = "Activos")+
+  theme_minimal()
+
 
 # Funcion de graficacion scatter
 
