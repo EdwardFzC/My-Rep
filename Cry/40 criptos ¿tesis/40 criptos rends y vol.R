@@ -1,3 +1,10 @@
+
+
+# FILTRAR LAS DE MAYOR VOLUMEN?
+
+
+
+
 ################
 library(readr)
 library(plotly)
@@ -6,22 +13,52 @@ library(reshape2)
 library(tidyverse)
 library(gtools)
 library(GGally)
+library(quantmod)
+library(lmtest)
+
+
+
 ################
     # DATOS CRYPTO
 
 # Lectura de datos
-data_raw <- data.frame(read_csv("1Weas/Github/My-Rep/Cry/40 criptos ¿tesis/crypto.csv/crypto.csv"))
+data_raw <- read_csv("1Weas/Github/My-Rep/Cry/40 criptos ¿tesis/crypto.csv/crypto.csv")
 
 # Filtrar los datos entre 31 de diciembre de 2020 a las 23:00 y la fecha más reciente
 data_raw$date <- as.POSIXct(data_raw$date, format="%d/%m/%Y %H:%M") # cosa rara se establece formato al revés
 start_date <- "2020-12-31 23:00:00" # Fecha filtro
+end_date <- "2024-02-20 02:00:00" # Fecha final
 data <- filter(data_raw, date>= start_date)
-
 # Comprobar de formato fecha
 #year(data$date[1])
 #month(data$date[1])
 #day(data$date[1])
 
+# Función renombrar columnas eliminando el sufijo "USDT_close u otros" y crear variable con nombres de activos
+get_assets <- function(data, suffix = "NA") {
+  column_names <- colnames(data_close_h)
+  assets <- gsub(suffix, "", column_names)
+  return(assets)
+}
+
+
+
+
+###############
+      # Datos Indices
+# Obtener datos horarios del syp500 y nasdaq desde yahoo finance
+syp500_prices <- data.frame(getSymbols("^GSPC", src = "yahoo", from = start_date, to = end_date, auto.assign = FALSE))
+nasdaq_prices <- data.frame(getSymbols("^IXIC", src = "yahoo", from = start_date, to = end_date, auto.assign = FALSE))
+
+syp500_prices <- syp500_prices %>% rownames_to_column(var = "date")
+nasdaq_prices <- nasdaq_prices %>% rownames_to_column(var = "date")
+
+syp500_prices$date <- as.Date(syp500_prices$date, format = "%Y-%m-%d")
+nasdaq_prices$date <- as.Date(nasdaq_prices$date, format = "%Y-%m-%d")
+
+
+syp500_close <- syp500_prices %>% select(date, GSPC.Close) %>% rename(syp500 = GSPC.Close)
+nasdaq_close <- nasdaq_prices %>% select(date, IXIC.Close) %>% rename(nasdaq = IXIC.Close)
 
 
 
@@ -30,70 +67,39 @@ data <- filter(data_raw, date>= start_date)
     # PREPARACIÓN DE DATOS
 
 # Seleccionar columnas de precios de cierre y volumen como nuevas df
-data_price <- data %>% select(!contains("volume"))
-data_close <- data_price %>% select(date, contains("close"))
-data_vol <- data %>% select(date, contains("volume"))
+data_price_h <- data %>% select(!contains("volume"))
+data_close_h <- data %>% select(date, contains("close"))
+data_vol_h <- data %>% select(date, contains("volume"))
 
-# Función renombrar columnas eliminando el sufijo "USDT_close u otros" y crear variable con nombres de activos
-get_assets <- function(data, suffix="USDT_close") {
-  column_names <- colnames(data_close)
-  assets <- gsub("USDT_close", "", column_names)
-  return(assets)
-}
+
 
 # Obtener el nombre de los activos usados
-assets <- get_assets(data_close)
+assets <- get_assets(data_close_h, "USDT_close")
 # Cambiar el nombre de columnas en Data frames para coincidir con los activos
 
-colnames(data_close) <- get_assets(data_close)
-colnames(data_vol) <- get_assets(data_vol,"USDT_volume")
+colnames(data_close_h) <- get_assets(data_close_h, "USDT_close")
+colnames(data_vol_h) <- get_assets(data_vol_h,"USDT_volume")
 
 # Crear un dataframe con los volúmenes en USD
-data_vol_usd <- data.frame(date=data_vol$date, mapply(function(vol, close) vol * close, data_vol[-1], data_close[-1]))
-
-
-
-
-
-
-################
-    # FUNCIÓN PARA CALCULAR RENDIMIENTOS
-
-# Función para calcular rendimientos logarítmicos
-calc_log_returns <- function(data) {
-  log_returns <- data.frame(date= data$date[-1], lapply(data[,-1], function(x) diff(log(x))))
-  return(log_returns)
-}
-
-# funcion para rendimientos en cambio porcentual
-calc_pct_returns <- function(data) {
-  pct_returns <- data.frame(date= data$date[-1], lapply(data[,-1], function(x) diff(x)/x[-length(x)]))
-  return(pct_returns)
-}
-
-# Función para calcular rendimientos acumulados
-calc_acum_returns <- function(data) {
-  acum_rends <- data.frame(date= data$date, lapply(data[,-1], function(x) cumsum(x)))
-}
-
-
+data_vol_usd_h <- data.frame(date=data_vol_h$date, mapply(function(vol, close) vol * close, data_vol_h[-1], data_close_h[-1]))
 
 
 
 
 ################
-    # FUNCION DE CAMBIO DE TEMPORALIDAD
+# FUNCION DE CAMBIO DE TEMPORALIDAD
 
- # Función para cambiar de temporalidad (usando XTS)
-change_timeframe <- function(data, timeframe, sum=FALSE) {
+# Función para cambiar de temporalidad (usando XTS)
+change_timeframe <- function(data, timeframe, sum=FALSE, OHLC=FALSE) {
   data_xts <- xts(data[-1], order.by = data$date) # Convertir a tipo xts y eliminar columna de fecha, ademas asegurar orden por fecha
-    if (sum==TRUE) {
-      data_xts <- period.apply(data_xts, endpoints(data_xts, timeframe), colSums) # Caso volumen, obtener la suma de datos dentro del periodo
-    }else{
-      data_xts <- to.period(data_xts, period = timeframe, OHLC=F) # Normal, cambio de temporalidad ultimo dato de periodo
-    }
-  data_xts <- as.data.frame(data_xts) # Volver a convertir en data frame
-  data_xts <- data_xts %>% rownames_to_column(var="date")
+  if (sum==TRUE) {
+    data_xts <- period.apply(data_xts, endpoints(data_xts, timeframe), colSums) # Caso volumen, obtener la suma de datos dentro del periodo
+  }else {
+    data_xts <- to.period(data_xts, period = timeframe, OHLC=OHLC) # Normal, cambio de temporalidad ultimo dato de periodo
+  }
+  data_xts <- as.data.frame(data_xts) %>% rownames_to_column(var="date")# Convertir a data frame
+  data_xts$date <- data_xts$date %>% as.Date(format = "%Y-%m-%d")
+
   return(data_xts)
 }
 
@@ -129,6 +135,85 @@ change_timeframe <- function(data, timeframe, sum=FALSE) {
 #     colMaxs         |  Calcula el valor máximo de cada columna
 #     apply           |  Aplica una función a las filas o columnas de una matriz
 #     custom_function |  Cualquier función personalizada definida por el usuario
+
+
+
+
+
+################
+    # UNIR PRECIOS DIARIOS DE CRIPTOS CON INDICES
+data_close_d <- change_timeframe(data_close_h, "day") %>%  as.xts()
+
+data_close_all <- merge(as.xts(syp500_close), as.xts(nasdaq_close), data_close_d,  how = "inner", all = F)
+data_close_all2 <- merge(syp500_close, nasdaq_close, data_close_d,  how = "inner", all = T)
+
+
+assets_all <- get_assets(data_close_all)
+
+# Hacer que las series sean estacionarias en data_close_all
+close_all_log <- log(as.data.frame(data_close_all))
+
+
+
+
+################
+    # Granger Causality
+data_call_ts <- data_close_all[,1:4] %>% ts()
+btc_ts <- data_close_all[, "BTC"] %>% ts()
+syp_ts <- data_close_all[, "syp500"] %>% ts()
+nasdaq_ts <- data_close_all[, "nasdaq"] %>% ts()
+
+lags <- 1:20  # Rango de lags
+results <- data.frame(Lag = lags, P_Value = numeric(length(lags)))
+
+for (lag in lags) {
+  result <- grangertest(data_close_all$syp500 ~ data_close_all$BTC, order = lag)
+  results$P_Value[lag] <- result$Pr[2]
+}
+
+
+a2 <-  calc_log_returns(data_close_all)
+a3 <- calc_log_returns(data_close_h)
+################
+    # FUNCIÓN PARA CALCULAR RENDIMIENTOS
+
+# Función para calcular rendimientos logarítmicos
+calc_log_returns <- function(data) {
+  if (colnames(data)[1] == "date") {
+    log_returns <- data.frame(date= data$date[-1], lapply(data[,-1], function(x) diff(log(x))))
+  } else {
+    log_returns <- data.frame(lapply(data, function(x) diff(log(x))))
+    log_returns <- log_returns[-1,] %>% as.xts()
+      }
+  return(log_returns)
+}
+
+# funcion para rendimientos en cambio porcentual
+calc_pct_returns <- function(data) {
+  if (colnames(data)[1] == "date") {
+    pct_returns <- data.frame(date= data$date[-1], lapply(data[,-1], function(x) diff(x)/x[-length(x)]))
+  } else {
+    pct_returns <- data.frame(lapply(data, function(x) diff(x)/x[-length(x)]))
+    pct_returns <- pct_returns[-1,] %>% as.xts()
+  }
+  return(pct_returns)
+}
+
+# Función para calcular rendimientos acumulados
+calc_acum_returns <- function(data) {
+  if (colnames(data)[1] == "date") {
+    acum_rends <- data.frame(date= data$date, lapply(data[,-1], function(x) cumsum(x)))
+  } else {
+    acum_rends <- data.frame(lapply(data, function(x) cumsum(x))) %>% as.xts()
+  }
+  return(acum_rends)
+}
+
+
+
+
+
+
 
 
 
@@ -396,14 +481,24 @@ portfolio_markowitz <- function(data , nport, wmin, risk_free=0.1) {
     # GRAFICAS
 
 # Graficas de correlacion datos 1H
-corr <- cor(data_close[-1], use = "complete.obs")
-ggpairs(corr, 
-        columns = 1:10,
-        lower = list(continuous = "smooth"))+
+corr <- data.frame(cor(data_close[-1], use = "complete.obs"))
+corr$assets <- assets[-1]
+
+ggpairs(data=corr, 
+        columns = 1:5,
+        lower = list(continuous = "smooth"),
+        aes(fill = 50))+
   labs(title = "Correlación de Precios de Cierre",
        x = "Activos",
-       y = "Activos")+
-  theme_minimal()
+       y = "Activos")
+data_close_melted <- melt(data_close, id.vars = "date")
+
+iris <- iris
+ggpairs(data_close,
+        columns = 2:5,
+        aes(alpha=0.2))
+# para cambiar el color en funcion de los assets se puede usar la funcion scale_fill_manual
+# por ejemplo scale_fill_manual(values = c("BTC" = "red", "ETH" = "blue", "BNB" = "green", "ADA" = "yellow", "XRP" = "purple", "DOGE" = "orange", "DOT" = "brown", "UNI" = "pink", "BCH" = "grey", "LTC" = "black")
 
 corr_log_rends <- cor(calc_log_returns(data_close)[-1], use = "complete.obs")
 ggpairs(corr_log_rends, 
