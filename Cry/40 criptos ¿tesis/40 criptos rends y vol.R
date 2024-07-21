@@ -5,23 +5,23 @@
 
 
 
+
 ####### LIBRERIAS #########
 library(readr)
 library(plotly)
 library(xts)
 library(reshape2)
-library(tidyverse)
 library(gtools)
-library(GGally)
 library(quantmod)
 library(lmtest)
-library(tseries)
 library(vars)
+library(stats)
+library(tseries)
 library(purrr)
 library(broom)
 library(ggpubr)
 library(knitr)
-
+library(tidyverse)
 # eliminar notacion cientifica
 options(scipen=999)
 
@@ -123,7 +123,7 @@ data_price_h <- data %>% select(!contains("volume"))
 data_close_h <- data %>% select(date, contains("close"))
 data_vol_h <- data %>% select(date, contains("volume"))
 
-
+data_log_h <- calc_log_returns(data_close_h)
 
 # Obtener el nombre de los activos usados
 assets <- get_assets(data_close_h, "USDT_close")
@@ -192,10 +192,9 @@ change_timeframe <- function(data, timeframe, sum=FALSE, OHLC=FALSE) {
 
 #######UNIR CRY - IND#########
     # UNIR PRECIOS DIARIOS DE CRIPTOS CON INDICES
-data_close_d <- change_timeframe(data_close_h, "day") %>%  as.xts()
+data_close_d <- change_timeframe(data_close_h, "day")
 
-data_close_all <- merge(as.xts(syp500_close), as.xts(nasdaq_close), data_close_d,  how = "inner", all = F)
-data_close_all2 <- merge(syp500_close, nasdaq_close, data_close_d,  how = "inner", all = T)
+data_close_all <- merge(as.xts(syp500_close), as.xts(nasdaq_close), as.xts(data_close_d), all = F)
 
 
 assets_all <- get_assets(data_close_all)
@@ -203,7 +202,10 @@ assets_all <- get_assets(data_close_all)
 # Hacer que las series sean estacionarias en data_close_all
 close_all_log <- log(as.data.frame(data_close_all))
 
+all_lcrends <- calc_log_returns(data_close_all)
+# los unicos estacionario son los rendimientos logaritmicos
 
+all_lcrends2 <- xts_to_dataframe(all_lcrends)
 
 ######## VARIABLES CRY ########
 # PREPARAR OTROS DATOS CRYPTO
@@ -220,9 +222,7 @@ fear_greed_index$date <- as.Date(fear_greed_index$date, format = "%Y-%m-%d")
 market_cap$date <- as.Date(market_cap$date, format = "%Y-%m-%d")
 
 btc_dom <- btc_dom[1:2]
-btc_close <- data_close_d %>% as.data.frame()
-btc_close <- btc_close %>% rownames_to_column(var="date")
-btc_close$date <- as.Date(btc_close$date, format = "%Y-%m-%d")
+btc_close <- data_close_d 
 btc_close2 <- btc_close[1:2]
 eth_close <- btc_close[c(1,3)]
 
@@ -230,6 +230,7 @@ btc_w_fgi <- merge(as.xts(btc_close2),as.xts(fear_greed_index), all = F)
 btc_w_dom <- merge(as.xts(btc_close2),as.xts(btc_dom), all = F)
 btc_w_mcap <-merge(as.xts(btc_close2),as.xts(market_cap), all = F) 
 
+eth_w_fgi <- merge(as.xts(eth_close),as.xts(btc_close), all = F)
 eth_w_fgi <- merge(as.xts(eth_close),as.xts(fear_greed_index), all = F)
 eth_w_dom <- merge(as.xts(eth_close),as.xts(btc_dom), all = F)
 eth_w_mcap <-merge(as.xts(eth_close),as.xts(market_cap), all = F) 
@@ -252,6 +253,7 @@ eth_w_lmcap <- calc_log_returns(eth_w_mcap)
 eth_w_lbtc <- calc_log_returns(eth_w_btc)
   eth_w_lbtc <- xts_to_dataframe(eth_w_lbtc)
 
+
 #######Granger Causality #########
     # Granger Causality solo full
 
@@ -259,33 +261,70 @@ eth_w_lbtc <- calc_log_returns(eth_w_btc)
 adf.test(data_close_all$syp500)
 adf.test(data_close_all$BTC)
 adf.test(data_close_all$nasdaq)
-# verificar estacionalidad
-adf.test(close_all_log$syp500)
-adf.test(close_all_log$BTC)
-adf.test(close_all_log$nasdaq)
+
 # verificar estacionalidad en rendimientos log
 adf.test(all_lcrends$syp500)
 adf.test(all_lcrends$BTC)
 adf.test(all_lcrends$nasdaq)
 
-all_lcrends <- calc_log_returns(data_close_all)
- # los unicos estacionario son los rendimientos logaritmicos
 
 # determinar numero de lags
 lag_selection <- VARselect(all_lcrends[, c("syp500", "BTC")], lag.max = 10, type = "const")
 lag_selection$selection
 
-# Prueba de causalidad de Granger
-granger_test <- grangertest(BTC ~ syp500, order = 1, data = all_lcrends)
-print(granger_test)
 
 
 
 
 ###############TEST DE GRANGER######################
       # TEST DE GRANGER
-all_lcrends2 <- all_lcrends2 %>% rename(date = Date)
-all_lcrends2$date <- as.Date(all_lcrends2$date, format = "%Y-%m-%d")
+
+
+#####Graficas precios#####
+
+
+grafica <- data_close_all %>% xts_to_dataframe()
+
+# Seleccionar las primeras 5 columnas (asumiendo que las columnas de interés están dentro de las primeras 5)
+grafica <- grafica[, 1:5]
+
+# Reestructurar los datos en formato largo y omitir NA
+all_data_close_5 <- melt(grafica, id.vars = "date") %>% na.omit()
+
+# Convertir la variable a carácter
+all_data_close_5$variable <- as.character(all_data_close_5$variable)
+
+# Crear la gráfica con ggplot2
+precios <- ggplot(all_data_close_5, aes(x = date, y = value, color = variable)) +
+  geom_line() +
+  scale_color_manual(values = c("syp500" = "#CDAD00", "nasdaq" = "#528B8B", "BTC" = "#EE6AA7", "ETH" = "#9A32CD")) +
+  facet_grid(variable ~ ., scales = "free_y") +
+  # para poner escala logaritmica se usa scale_y_log10()
+  scale_y_log10(breaks = function(x) pretty(x, n = 3)) + 
+  labs(title = "Precios de Cierre Bitcoin, S&P 500 y NASDAQ 100",
+       x = NULL,
+       y = "Precio de Cierre",
+       color = "Activo") +
+  theme(legend.position = "bottom", plot.title = element_text(hjust = 0.5))
+
+# Convertir la gráfica a un objeto plotly para interactividad
+precios2 <- ggplotly(precios)%>% layout(legend = list(orientation = "h",   # Orientación horizontal
+                                                      x = 0.5,              # Centrado horizontalmente
+                                                      xanchor = "center",   # Alineación horizontal
+                                                      y = -0.2)) 
+
+# Mostrar la gráfica
+print(precios2)
+
+
+
+
+
+
+
+
+
+
 
 
 # Función para calcular el test de Granger a lo largo del tiempo
@@ -451,7 +490,7 @@ combined_plot_granger <- ggplot(all_data_granger, aes(x = date, y = p_value)) +
   facet_grid(. ~ Variable , scales = "free_x") +
   labs(title = "Causalidad de Granger entre Bitcoin y Variables Independientes",
        subtitle = "Ventana Movil = 30",
-       x = "Variable Independiente",
+       x = NULL,
        y = "Valor p",
        color = "Influencia Potencial -> (p < 0.05)") +
   theme(legend.position = "bottom",
@@ -464,6 +503,8 @@ print(combined_plot_granger)
 
 
 ## CON ETH
+# syp500
+eth_syp <- calcular_granger_temporal(all_lcrends2, "syp500", "ETH", ventana = 30)
 # btc
 eth_btc <- calcular_granger_temporal(eth_w_lbtc, "BTC", "ETH", ventana = 30)
 #dominancia btc
@@ -473,21 +514,22 @@ eth_fgi <- calcular_granger_temporal(eth_w_lfgi, "fg_index", "ETH", ventana = 30
 #market cap
 eth_mcap <- calcular_granger_temporal(eth_w_lmcap, "market_cap", "ETH", ventana = 30)
 
+eth_syp <- eth_syp %>% mutate(Variable = "S&P 500")
 eth_btc <- eth_btc %>% mutate(Variable = "BTC")
 eth_dom <- eth_dom %>% mutate(Variable = "BTC Dominance")
 eth_fgi <- eth_fgi %>% mutate(Variable = "Fear & Greed Index")
 eth_mcap <- eth_mcap %>% mutate(Variable = "Market Cap")
 
-all_data_granger_eth <- bind_rows(eth_btc, eth_dom, eth_fgi, eth_mcap)
+all_data_granger_eth <- bind_rows(eth_syp, eth_btc, eth_dom, eth_fgi, eth_mcap)
 
 combined_plot_granger_eth <- ggplot(all_data_granger_eth, aes(x = date, y = p_value)) +
   geom_point(aes(color = p_value < 0.05)) +
   geom_hline(yintercept = 0.05, linetype = "dashed", color = "black") +
   scale_color_manual(values = c("TRUE" = "#CDAD00", "FALSE" = "#528B8B")) +
   facet_grid(. ~ Variable , scales = "free_x") +
-  labs(title = "Causalidad de Granger entre Bitcoin y Variables Independientes",
+  labs(title = "Causalidad de Granger entre Ethereum y Variables Independientes",
        subtitle = "Ventana Movil = 30",
-       x = "Variable Independiente",
+       x = NULL,
        y = "Valor p",
        color = "Influencia Potencial -> (p < 0.05)") +
   theme(legend.position = "bottom",
@@ -632,12 +674,7 @@ print(kable(all_results3, format = "markdown"))
 
   # CON ETH
 
-variables_eth <- list(
-  BTC = eth_w_lbtc,,
-  btc_dom = eth_w_ldom,
-  fg_index = eth_w_lfgi,
-  market_cap = eth_w_lmcap
-)
+
 
 # para btc
 btc_model <- lm(ETH ~ BTC, data = eth_w_lbtc)

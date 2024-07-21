@@ -1,0 +1,731 @@
+---
+title: Análisis de Impacto y relación causa/efecto de métricas del mercado cripto y principales índices de bolsa estadounidenses sobre Bitcoin y Ethereum
+author: "Eduardo Fernández C."
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introducción
+
+En el presente documento se busca profundizar sobre el conocimiento del impacto de los mercados tradicionales, como el S&P 500, el nasdaq o múltiples métricas dentro del entrono de las criptomonedas, como la dominancia de Bitcoin, la capitalización de mercado o el fear-greed index, y cual es el efecto tienen sobre el precio de Bitcoin y Ethereum, esto mediante regresiones lineales simples y un análisis de Causalidad mediante el test de Granger Causality.
+
+Tras el análisis, es posible determinar posible causa/efecto entre Bitcoin, el syp500, nasdaq, la capitalización de mercado y la dominancia de bitcoin, presentando resultados similares con Ethereum, al cual se le añade el efecto respecto a Bitcoin. Además, no es posible determinar una relacion causa efecto significativa y constante entre estos 2 activos y el Fear y Greed Index.
+
+Es posible determinar una relacion lineal positiva entre bitcoin, ethereum y todas las variables analizadas, aunque con ciertas inconsistencias, sobre todo al referirse a la relacion entre ethereum y la dominancia de Bitcoin.
+
+### Base de Datos
+
+Para el presente estudio se utilizan 3 fuentes de datos distintas.
+
+Para los datos de precios de criptomonedas se utilizan datos horarios de los **futuros** **perpetuos de Binance**, disponibles en <https://www.kaggle.com/datasets/hsergeyfrolov/top-40-crypto-perpetuals-hourly-prices>, dicha base de datos presenta la siguiente estructura:
+
+> -   Datos desde el **2020-09-04 06:00:00** al **2024-02-20 02:00:00**.
+>
+> -   **49 variables únicas** compuestas cada una por el *precio de apertura, máximo, mínimo, cierre y volumen en unidades*.
+>
+> -   Sin embargo, para efectos de este análisis, los activos utilizados son unicamente [*`BTC`, `ETH`*]{.smallcaps}, ambos en su paridad al **USDT**:
+
+Para los datos diarios de los indices americanos **S&P 500** y **nasdaq** **100**, se utilizo la librería `quantmod` , la cual permite la descarga de activos mediante **Yahoo Finance**, dichos datos presentan la siguiente estructura
+
+> -   Datos desde el **2020-12-31 23:00:00** al **2024-02-20 02:00:00**.
+>
+> -   Datos de 2 variables únicas, el `syp500` y el `nasdaq`, compuestas cada una, en diferentes data frames, por *precio de cierre, precio de apertura, precio máximo, precio mínimo, volumen y precio de cierre ajustado*.
+
+Para los datos de las variables de indicadores del entorno cripto, se utilizaron datos de **Coinmarketcap**, disponibles en <https://coinmarketcap.com/es/charts/>, en los cuales, cada variable se encuentra en una localización distinta al tener distintas periodicidades.
+
+> **La Dominancia del Bitcoin**:
+>
+> -   Presenta datos semanales del **2013/05/04** al **2024/07/13**.
+>
+> -   Compuesto por la dominancia de `BTC`, `ETH`, `USDT`, `BNB`, `SOL` y `Otros` .
+>
+> -   En el mercado cripto, el dominio de una moneda es la ratio entre su capitalización de mercado y la capitalización de mercado total de las criptomonedas restantes ( Tradin View s.f).
+>
+> **La Capitalización de Mercado:**
+>
+> -   Presenta datos cada 2 días del **2013/04/28** al **2024/07/15.**
+>
+> -   Compuesto por el `Market cap`.
+>
+> -   La Capitalización de Mercado en finanzas se refiere al valor total de mercado de una empresa, calculado multiplicando el precio actual de sus acciones por el número total de acciones en circulación (BMV blog).
+>
+> **El Fear-Greed Index:**
+>
+> -   Presenta datos diarios del **2023/06/28** al **2024/07/16.**
+>
+> -   Compuesto por `Fear & greed index`
+>
+> -   Este es un indicador que, según Binance (2024)"El índice oscila entre 0 (miedo extremo) y 100 (codicia extrema), lo que refleja el sentimiento del mercado de criptomonedas".
+
+## Preguntas de investigación
+
+La presente investigación busca responder o ampliar el conocimiento ante las siguientes preguntas:
+
+> 1.  ¿Existe relación causal entre el mercado tradicional de acciones hacia el mercado de criptomonedas?
+>
+> 2.  ¿Cómo se presenta el impacto de Bitcoin sobre el resto del mercado?
+>
+> 3.  ¿Existe una relación causal entre bitcoin y ethereum con métricas del mercado cripto?
+>
+> 4.  ¿Existe relación entre mercados tradicionales y métricas del entorno cripto, ante Bitcoin y Ethereum?
+
+## Preparación de datos
+
+#### Librerías
+
+Para el análisis, preparación, limpieza de datos y presentación de resultados, se utilizan las siguientes librerías.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+library(readr)
+library(plotly)
+library(xts)
+library(reshape2)
+library(gtools)
+library(quantmod)
+library(lmtest)
+library(vars)
+library(stats)
+library(tseries)
+library(purrr)
+library(broom)
+library(ggpubr)
+library(knitr)
+library(tidyverse)
+# eliminar notacion cientifica
+options(scipen=999)
+```
+
+#### Limpieza y preparación de datos
+
+```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+# FUnciones
+# Función renombrar columnas eliminando el sufijo "USDT_close u otros" y crear variable con nombres de activos
+get_assets <- function(data, suffix = "NA") {
+  column_names <- colnames(data_close_h)
+  assets <- gsub(suffix, "", column_names)
+  return(assets)
+}
+
+####### FUNCIONES RENDS #########
+# FUNCIÓN PARA CALCULAR RENDIMIENTOS
+
+# Función para calcular rendimientos logarítmicos
+calc_log_returns <- function(data) {
+  if (colnames(data)[1] == "date") {
+    log_returns <- data.frame(date= data$date[-1], lapply(data[,-1], function(x) diff(log(x))))
+  } else {
+    log_returns <- data.frame(lapply(data, function(x) diff(log(x))))
+    log_returns <- log_returns[-1,] %>% as.xts()
+  }
+  return(log_returns)
+}
+
+# funcion para rendimientos en cambio porcentual
+calc_pct_returns <- function(data) {
+  if (colnames(data)[1] == "date") {
+    pct_returns <- data.frame(date= data$date[-1], lapply(data[,-1], function(x) diff(x)/x[-length(x)]))
+  } else {
+    pct_returns <- data.frame(lapply(data, function(x) diff(x)/x[-length(x)]))
+    pct_returns <- pct_returns[-1,] %>% as.xts()
+  }
+  return(pct_returns)
+}
+
+# Función para calcular rendimientos acumulados
+calc_acum_returns <- function(data) {
+  if (colnames(data)[1] == "date") {
+    acum_rends <- data.frame(date= data$date, lapply(data[,-1], function(x) cumsum(x)))
+  } else {
+    acum_rends <- data.frame(lapply(data, function(x) cumsum(x))) %>% as.xts()
+  }
+  return(acum_rends)
+}
+
+# funcion xts a dataframe
+xts_to_dataframe <- function(data) {
+  data <- as.data.frame(data) %>% rownames_to_column(var="date")
+  data$date <- as.Date(data$date, format = "%Y-%m-%d")
+  return(data)
+}
+change_timeframe <- function(data, timeframe, sum=FALSE, OHLC=FALSE) {
+  data_xts <- xts(data[-1], order.by = data$date) # Convertir a tipo xts y eliminar columna de fecha, ademas asegurar orden por fecha
+  if (sum==TRUE) {
+    data_xts <- period.apply(data_xts, endpoints(data_xts, timeframe), colSums) # Caso volumen, obtener la suma de datos dentro del periodo
+  }else {
+    data_xts <- to.period(data_xts, period = timeframe, OHLC=OHLC) # Normal, cambio de temporalidad ultimo dato de periodo
+  }
+  data_xts <- as.data.frame(data_xts) %>% rownames_to_column(var="date")# Convertir a data frame
+  data_xts$date <- data_xts$date %>% as.Date(format = "%Y-%m-%d")
+
+  return(data_xts)
+}
+
+
+calcular_granger_temporal <- function(data, var_causa, var_efecto, ventana = 30) {
+  n <- nrow(data)
+  resultados <- data.frame(
+    fecha = seq_len(n),
+    p_value = rep(NA, n)
+  )
+  
+  for (i in ventana:n) {
+    subset_data <- data[(i - ventana + 1):i, ]
+    tryCatch({
+      test <- grangertest(formula(paste(var_efecto, "~", var_causa)), 
+                          order = 1, 
+                          data = subset_data)
+      resultados$p_value[i] <- test$`Pr(>F)`[2]
+    }, error = function(e) {
+      message("Error en el cálculo de Granger para el punto ", i, ": ", e$message)
+    })
+  }
+  resultados$date <- data$date %>% as.Date()
+  return(resultados)
+}
+
+
+granger_test_temporal_graficas <- function(data, var_causa, var_efecto, ventana = 30) {
+  resultados <- calcular_granger_temporal(data, var_causa, var_efecto, ventana = 30)
+    plot <- ggplot(na.omit(resultados), aes(x = date, y = p_value)) +
+    geom_hline(yintercept = 0.05, linetype = "dashed", color = "black") +
+    geom_point(aes(color = p_value < 0.05)) +
+    scale_color_manual(values = c("TRUE" = "#CDAD00", "FALSE" = "#528B8B")) +
+    labs(title = sprintf("Causalidad de Granger: %s -> %s", var_causa, var_efecto), 
+         subtitle = sprintf("Ventana Movil = %d", ventana),
+         x = NULL,
+         y = "Valor p",
+         color = "Influencia Potencial -> (p < 0.05)") +
+    theme_minimal() +
+    theme(legend.position = "bottom",
+          plot.title = element_text(hjust = 0.5),
+          plot.subtitle = element_text(hjust = 0.5))
+  #plot2 <- ggplotly(plot) %>%
+   #layout(legend = list(orientation = "h",  # orientación horizontal
+                       #  x = 0.5,  # centra la leyenda horizontalmente
+                       #  xanchor = "center",  # ancla la leyenda en el centro horizontal
+                       #  y = -0.2))  # coloca la leyenda debajo del gráfico
+  return(plot)
+}
+
+
+get_regression_stats <- function(model) {
+  summary_model <- summary(model)
+  tibble(
+    R_squared = summary_model$r.squared,
+    Adj_R_squared = summary_model$adj.r.squared,
+    F_statistic = summary_model$fstatistic[1],
+    p_value = pf(summary_model$fstatistic[1], 
+                 summary_model$fstatistic[2], 
+                 summary_model$fstatistic[3], 
+                 lower.tail = FALSE),
+    std_error = summary_model$sigma
+  )
+}
+```
+
+Primero se hace la lectura y descarga de los datos originales
+
+```{r pressure, echo=TRUE, message=FALSE, warning=FALSE, paged.print=TRUE}
+  # Datos precios crypto
+data_raw <- read_csv("crypto.csv/crypto.csv")
+start_date <- "2020-12-31 23:00:00" # Fecha filtro
+end_date <- "2024-02-20 02:00:00" # Fecha final
+  # Datos indices bolsa
+ syp500_prices <- data.frame(getSymbols("^GSPC", src = "yahoo", from = start_date, to = end_date, auto.assign = FALSE))
+nasdaq_prices <- data.frame(getSymbols("^IXIC", src = "yahoo", from = start_date, to = end_date, auto.assign = FALSE))
+
+  # Datos metricas cripto
+btc_dom <- read_csv("btc_dominance.csv")
+fear_greed_index <- read_csv("fear_greed_index.csv")
+market_cap <- read_csv("market_cap.csv")
+```
+
+Lo datos de precios de criptomonedas se acortan a un periodo específico, se obtienen precios únicamente de cierre y se convierten a cambios logarítmicos en una nueva data frame.
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=TRUE}
+# date como fromtato fecha
+data_raw$date <- as.POSIXct(data_raw$date, format="%d/%m/%Y %H:%M")
+
+data <- filter(data_raw, date>= start_date) # datos filtrados por fecha
+
+# Se obtienen los datos de cierre
+data_close_h <- data %>% select(date, contains("close"))
+# Se renombran para que quede solo el nombre del activo
+colnames(data_close_h) <- get_assets(data_close_h, "USDT_close")
+# Se transforman a cambios log mediante una funcion
+data_log_h <- calc_log_returns(data_close_h)
+# Se obtienen en temporalidad diaria
+```
+
+A datos del `syp500` y `nasdaq` se les establece la columna de `date` y se transforma a tipo fecha, para luego cambiar el nombre de las columnas
+
+```{r echo=TRUE, message=FALSE, warning=FALSE, paged.print=TRUE}
+# Establecer columna de fechas con nombre de filas
+syp500_prices <- syp500_prices %>% rownames_to_column(var = "date")
+nasdaq_prices <- nasdaq_prices %>% rownames_to_column(var = "date")
+# Cambiar formato a fechas
+syp500_prices$date <- as.Date(syp500_prices$date, format = "%Y-%m-%d")
+nasdaq_prices$date <- as.Date(nasdaq_prices$date, format = "%Y-%m-%d")
+# Cambiar el nombre para facilitar reconocimiento
+syp500_close <- syp500_prices %>% select(date, GSPC.Close) %>% rename(syp500 = GSPC.Close)
+nasdaq_close <- nasdaq_prices %>% select(date, IXIC.Close) %>% rename(nasdaq = IXIC.Close)
+```
+
+Después se transforman los precios de cierre a datos diarios, y se ejecuta un `merge` con los datos del `syp500` y `nasdaq` transformados a objeto `xts` para facilitar la unión. También se transforman a cambios logarítmicos y se transforma a data frame con una columna de `date` en formato fecha.
+
+```{r message=FALSE, warning=FALSE, paged.print=TRUE}
+# Transformacion a datos diarios
+data_close_d <- change_timeframe(data_close_h, "day")
+# Merge con objetos xts
+data_close_all <- merge(as.xts(syp500_close), as.xts(nasdaq_close), as.xts(data_close_d), all = F)
+
+# Se calculan los cierres diarios a cambios logaritmicos
+all_lcrends <- calc_log_returns(data_close_all)
+# Se transforma a data frame
+all_lcrends2 <- xts_to_dataframe(all_lcrends)
+```
+
+A los datos de métricas cripto se les establece el formato fecha a date, y se le cambia el nombre a las columnas
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+# Renombrar columnas
+btc_dom <- rename(btc_dom, date = DateTime, btc_dom = BTC)
+fear_greed_index <- rename(fear_greed_index, date = DateTime, fg_index = "Fear & greed index" )
+market_cap <- rename(market_cap, date = DateTime, market_cap = "Market cap")
+# Establecer formato fecha
+btc_dom$date <- as.Date(btc_dom$date, format = "%Y-%m-%d")
+fear_greed_index$date <- as.Date(fear_greed_index$date, format = "%Y-%m-%d")
+market_cap$date <- as.Date(market_cap$date, format = "%Y-%m-%d")
+# Se limpia para solo las columnas deseadas
+btc_dom <- btc_dom[1:2]
+btc_close <- data_close_d 
+btc_close2 <- btc_close[1:2]
+eth_close <- btc_close[c(1,3)]
+```
+
+Al tener distintas fechas, para evitar una mayor perdida de información se separan en distintas data frames en combinación con `BTC` y `ETH` para facilitar el análisis. El `merge` se realiza con objetos `xts` para facilitarlo.
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+# Se separa en data frames y se unene con un merge con objetos xts
+btc_w_fgi <- merge(as.xts(btc_close2),as.xts(fear_greed_index), all = F)
+btc_w_dom <- merge(as.xts(btc_close2),as.xts(btc_dom), all = F)
+btc_w_mcap <-merge(as.xts(btc_close2),as.xts(market_cap), all = F) 
+
+eth_w_fgi <- merge(as.xts(eth_close),as.xts(fear_greed_index), all = F)
+eth_w_dom <- merge(as.xts(eth_close),as.xts(btc_dom), all = F)
+eth_w_mcap <-merge(as.xts(eth_close),as.xts(market_cap), all = F) 
+eth_w_btc <- merge(as.xts(eth_close),as.xts(btc_close2), all = F)
+```
+
+Luego se establecen como cambios logarítmicos y de vuelta a tipo data frame
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+# Calcular cambios log, y convertir a data frame
+btc_w_lfgi <- calc_log_returns(btc_w_fgi)
+  btc_w_lfgi <- xts_to_dataframe(btc_w_lfgi)
+btc_w_ldom <- calc_log_returns(btc_w_dom)
+  btc_w_ldom <- xts_to_dataframe(btc_w_ldom)
+btc_w_lmcap <- calc_log_returns(btc_w_mcap)
+  btc_w_lmcap <- xts_to_dataframe(btc_w_lmcap)
+
+eth_w_lfgi <- calc_log_returns(eth_w_fgi)
+  eth_w_lfgi <- xts_to_dataframe(eth_w_lfgi)
+eth_w_ldom <- calc_log_returns(eth_w_dom)
+  eth_w_ldom <- xts_to_dataframe(eth_w_ldom)
+eth_w_lmcap <- calc_log_returns(eth_w_mcap)
+  eth_w_lmcap <- xts_to_dataframe(eth_w_lmcap)
+eth_w_lbtc <- calc_log_returns(eth_w_btc)
+  eth_w_lbtc <- xts_to_dataframe(eth_w_lbtc)
+```
+
+Toda esta limpieza deja múltiples data frames a las cuales se les realizara el análisis, en concreto se observan:
+
+> -   `data_close_all` como objeto con todos los **precios** **de** **cierre** de los *activos*
+>
+> -   `all_lcrends2` como objeto con todos los **cambios** **logarítmicos** de los *activos*
+>
+> -   `btc_w_lfgi` como objeto con datos de **cambios** **logarítmicos** de *BTC* y el *indice Fear-Greed*
+>
+> -   `btc_w_ldom` como objeto con datos de **cambios** **logarítmicos** de *BTC* y la *Dominancia de BTC*
+>
+> -   `btc_w_lmcap` como objeto con datos de **cambios** **logarítmicos** de *BTC* y *la Capitalización de Mercado*
+>
+> -   `eth_w_lfgi` como objeto con datos de **cambios** **logarítmicos** de *ETH* y *el indice Fear-Greed*
+>
+> -   `eth_w_ldom` como objeto con datos de **cambios** **logarítmicos** de *ETH* y *la Dominancia de BTC*
+>
+> -   `eth_w_lmcap` como objeto con datos de **cambios** **logarítmicos** de *ETH* y *la Capitalización de Mercado*
+>
+> -   `eth_w_lbtc` como objeto con datos de **cambios** **logarítmicos** de *ETH* y *BTC*
+
+## Análisis y Resultados
+
+### Granger Causality Test
+
+Según Eric (2021), la **causalidad de Granger** es una prueba econométrica utilizada para verificar la utilidad de una variable para pronosticar otra.
+
+[![Fuente: Mathworks.com](images/clipboard-2285243423.png){width="331"}](https://la.mathworks.com/matlabcentral/answers/2011182-granger-causality-test-for-values-above-a-threshold-in-time-series-data)
+
+Se dice que una variable:
+
+-   ***Granger-cause*** otra variable si es útil para pronosticar la otra variable ***(p\<0.05)***.
+
+-   ***Error a Granger-cause*** si no es útil para pronosticar la otra variable ***(p\>0.05)***.
+
+Cabe destacar que esta prueba no proporciona información sobre la relacion causal real entre dos variables, sino sobre la capacidad de predicción de una sobre la otra, es decir busca identificar relaciones cusa-efecto.
+
+Primero se busca determinar el tipo de datos que serán usados, para ello se realiza una prueba de estacionalidad. Para ello se usa la función `adf.test` de la librería `stats`
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+# verificar estacionalidad
+adf.test(data_close_all$syp500)
+adf.test(data_close_all$BTC)
+adf.test(data_close_all$nasdaq)
+
+# verificar estacionalidad en rendimientos log
+adf.test(all_lcrends$syp500)
+adf.test(all_lcrends$BTC)
+adf.test(all_lcrends$nasdaq)
+```
+
+De esto se concluye que la mejor opción es utilizar los datos en formato cambios logarítmicos, pues son los únicos que pasan la prueba.
+
+De igual forma se realiza una prueba para establecer el numero de lags que se usaran para el Granger Test, esto se hace usando la función `VARselect`, de la libreria `vars` la cual elige el lag optimo para los datos.
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+# determinar numero de lags
+lag_selection <- VARselect(all_lcrends[, c("syp500", "BTC")], lag.max = 10, type = "const")
+# Obtener los lags optimos
+lag_selection$selection
+```
+
+De dicha prueba se logra determinar que lo mejor es realizar la prueba con un lag de 1.
+
+Al realizar una primera prueba se logra concluir que no existe una relacion causal entre las variables, sin embargo, esto es mediante un análisis de toda la linea temporal.
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+# Prueba de causalidad de Granger
+granger_test <- grangertest(BTC ~ syp500, order = 1, data = all_lcrends)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=TRUE}
+print(granger_test)
+```
+
+Debido a que el análisis se realiza de una sola vez para todas las series de tiempo, es difícil encontrar patrones reales, siendo que en este caso **no se puede determinar la posible existencia de una relacion causa/efecto,** debido a que la **significancia es mayor al 0.05**, por lo que se opta por realizar análisis mediante ventanas de tiempo, buscando encontrar las relaciones a lo largo del tiempo y con todas las variables.
+
+```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+# syp500
+btc_syp <- calcular_granger_temporal(all_lcrends2, "syp500", "BTC", ventana = 30)
+# nasdaq
+btc_nasdaq <- calcular_granger_temporal(all_lcrends2, "nasdaq", "BTC", ventana = 30)
+# dominancia btc
+btc_dom <- calcular_granger_temporal(btc_w_ldom, "btc_dom", "BTC", ventana = 30)
+# fear greed index
+btc_fgi <- calcular_granger_temporal(btc_w_lfgi, "fg_index", "BTC", ventana = 30)
+# market cap
+btc_mcap <- calcular_granger_temporal(btc_w_lmcap, "market_cap", "BTC", ventana = 30)
+
+btc_syp <- btc_syp %>% mutate(Variable = "S&P 500")
+btc_nasdaq <- btc_nasdaq %>% mutate(Variable = "NASDAQ")
+btc_dom <- btc_dom %>% mutate(Variable = "BTC Dominance")
+btc_fgi <- btc_fgi %>% mutate(Variable = "Fear & Greed Index")
+btc_mcap <- btc_mcap %>% mutate(Variable = "Market Cap")
+
+# Combinar todos los dataframes en uno solo
+all_data_granger <- bind_rows(btc_syp, btc_nasdaq, btc_dom, btc_fgi, btc_mcap)
+```
+
+Se obtiene la siguiente figura:
+
+```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+combined_plot_granger <- ggplot(na.omit(all_data_granger), aes(x = date, y = p_value)) +
+  geom_point(aes(color = p_value < 0.05)) +
+  geom_hline(yintercept = 0.05, linetype = "dashed", color = "black") +
+  scale_color_manual(values = c("TRUE" = "#CDAD00", "FALSE" = "#528B8B")) +
+  facet_grid(. ~ Variable , scales = "free_x") +
+  labs(title = "Causalidad de Granger entre Bitcoin y Variables Independientes",
+       subtitle = "Ventana Movil = 30",
+       x = NULL,
+       y = "Valor p",
+       color = "Influencia Potencial -> (p < 0.05)") +
+  theme(legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+print(combined_plot_granger)
+```
+
+De este análisis **se puede confirmar la posibilidad** **de que exista una relacion causa/efecto** entre la *dominancia de bitcoin, la capitalización de mercado, el nasdaq y el syp500*, al menos durante algunos periodos de tiempo.
+
+En cuanto a los mercados tradicionales, estos cuentan con una reacción similar, aunque superior por parte del *syp500.*
+
+En cuanto a las métricas del mercado cripto, l*a dominancia de bitcoin y la capitalización de mercado* tienen un comportamiento en donde al inicio no llegaban a tener una relacion ante los cambios en BTC, son embargo, al acercarse cada vez mas a fechas recientes, se logra observar que estas métricas sí pueden tener un impacto o una relacion. Por caso contrario, el *Fear y Greed Index*, no logra brindar evidencia consistente sobre una relacion causal con *BTC*.
+
+Al realizar el mismo análisis, pero ahora respecto a `ETH` se obtiene la siguiente figura:
+
+```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+# syp500
+eth_syp <- calcular_granger_temporal(all_lcrends2, "syp500", "ETH", ventana = 30)
+# btc
+eth_btc <- calcular_granger_temporal(eth_w_lbtc, "BTC", "ETH", ventana = 30)
+#dominancia btc
+eth_dom <- calcular_granger_temporal(eth_w_ldom, "btc_dom", "ETH", ventana = 30)
+#fear greed index
+eth_fgi <- calcular_granger_temporal(eth_w_lfgi, "fg_index", "ETH", ventana = 30)
+#market cap
+eth_mcap <- calcular_granger_temporal(eth_w_lmcap, "market_cap", "ETH", ventana = 30)
+
+eth_syp <- eth_syp %>% mutate(Variable = "S&P 500")
+eth_btc <- eth_btc %>% mutate(Variable = "BTC")
+eth_dom <- eth_dom %>% mutate(Variable = "BTC Dominance")
+eth_fgi <- eth_fgi %>% mutate(Variable = "Fear & Greed Index")
+eth_mcap <- eth_mcap %>% mutate(Variable = "Market Cap")
+
+all_data_granger_eth <- bind_rows(eth_syp, eth_btc, eth_dom, eth_fgi, eth_mcap)
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+combined_plot_granger_eth <- ggplot(na.omit(all_data_granger_eth), aes(x = date, y = p_value)) +
+  geom_point(aes(color = p_value < 0.05)) +
+  geom_hline(yintercept = 0.05, linetype = "dashed", color = "black") +
+  scale_color_manual(values = c("TRUE" = "#CDAD00", "FALSE" = "#528B8B")) +
+  facet_grid(. ~ Variable , scales = "free_x") +
+  labs(title = "Causalidad de Granger entre Ethereum y Variables Independientes",
+       subtitle = "Ventana Movil = 30",
+       x = NULL,
+       y = "Valor p",
+       color = "Influencia Potencial -> (p < 0.05)") +
+  theme(legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+print(combined_plot_granger_eth)
+```
+
+Al comparar los gráficos se observa un comportamiento similar al de *BTC* respecto a el *Syp500*, aunque con un impacto menor.
+
+*El Fear y Greed Index* de igual forma no presenta información que apoye una relacion causal.
+
+El comportamiento respecto a *la dominancia de Bitcoin*, es menos notorio, sin embargo aun esta presente.
+
+*La capitalización de mercado* tiene efecto únicamente en 2 periodos de tiempo, a finales del 2022 y a finales del 2023.
+
+En cuanto a su relacion causal con *bitcoin*, los resultados, si bien muestra la posibilidad de una relacion causal esta no es tan marcada como se esperaría.
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+grafica <- data_close_all %>% xts_to_dataframe()
+
+# Seleccionar las primeras 5 columnas (asumiendo que las columnas de interés están dentro de las primeras 5)
+grafica <- grafica[, 1:5]
+
+# Reestructurar los datos en formato largo y omitir NA
+all_data_close_5 <- melt(grafica, id.vars = "date") %>% na.omit()
+
+# Convertir la variable a carácter
+all_data_close_5$variable <- as.character(all_data_close_5$variable)
+
+# Crear la gráfica con ggplot2
+precios <- ggplot(all_data_close_5, aes(x = date, y = value, color = variable)) +
+  geom_line() +
+  scale_color_manual(values = c("syp500" = "#CDAD00", "nasdaq" = "#528B8B", "BTC" = "#EE6AA7", "ETH" = "#9A32CD")) +
+  facet_grid(variable ~ ., scales = "free_y") +
+  scale_y_continuous(breaks = function(x) pretty(x, n = 3)) + 
+  labs(title = "Precios de Cierre Bitcoin, S&P 500 y NASDAQ 100",
+       x = NULL,
+       y = "Precio de Cierre",
+       color = "Activo") +
+  theme(legend.position = "bottom", plot.title = element_text(hjust = 0.5))
+
+```
+
+Al comparar los resultados con las gráficas individuales de los activos, presentan movimientos estructurales significativamente similares, con tendencias compartidas en casi todos los casos, sobre todo en cuanto a Bitcoin y Ethereum, se podría llegar a esperar una mayor causalidad, sin embargo, esto se puede ver afectado por la percepción de que la correlación entre las variables implicaría causalidad entre estas, cuando no es completamente así en el caso, ademas de que existen militantes en cuanto al test de Grangerel cual tiene limitantes para detectar cambios estructurales o de alta volatilidad, los cuales son características notables en el mercado de las criptomonedas
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+print(precios)
+```
+
+### Modelos de Regresión
+
+Según Saavedra (2023), La regresión lineal es un modelo matemático que describe la relación entre varias variables. Los modelos de regresión lineal son un procedimiento estadístico que ayuda a predecir el futuro.
+
+$$
+Y_t= β_1 + β_2X_t+u_t 
+$$
+
+En este caso se utiliza un modelo de regresión lineal simple entre `BTC` y cada una de las otras variables de análisis menos `ETH`, y también se analiza `ETH` respecto a `BTC`, `btc_dom`, `fg_index` y `market_cap` .
+
+De la regresión con `BTC` regresión se obtiene la siguiente gráfica:
+
+```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+# Crear gráfico combinado con facet_grid
+all_data_lm <- bind_rows(
+  mutate(all_lcrends2, variable = "S&P 500", x = syp500),
+  mutate(all_lcrends2, variable = "NASDAQ", x = nasdaq),
+  mutate(btc_w_ldom, variable = "BTC Dominance", x = btc_dom),
+  mutate(btc_w_lfgi, variable = "Fear & Greed Index", x = fg_index),
+  mutate(btc_w_lmcap, variable = "Market Cap", x = market_cap)
+)
+
+combined_plot_lm <- ggplot(all_data_lm, aes(x = x, y = BTC)) +
+  geom_point() +
+  geom_smooth(method = "lm", color = "red") +
+  facet_grid(. ~ variable, scales = "free_x", ) +
+  labs(title = "BTC vs Variables Independientes",
+       x = "Variable Independiente",
+       y = "BTC")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Regresión para syp500
+syp500_model <- lm(BTC ~ syp500, data = all_lcrends2)
+syp500_stats <- get_regression_stats(syp500_model)
+
+# Regresión para nasdaq
+nasdaq_model <- lm(BTC ~ nasdaq, data = all_lcrends2)
+nasdaq_stats <- get_regression_stats(nasdaq_model)
+
+# Regresión para BTC Dominance
+btc_dom_model <- lm(BTC ~ btc_dom, data = btc_w_ldom)
+btc_dom_stats <- get_regression_stats(btc_dom_model)
+
+# Regresión para Fear & Greed Index
+fg_index_model <- lm(BTC ~ fg_index, data = btc_w_lfgi)
+fg_index_stats <- get_regression_stats(fg_index_model)
+
+# Regresión para Market Cap
+market_cap_model <- lm(BTC ~ market_cap, data = btc_w_lmcap)
+market_cap_stats <- get_regression_stats(market_cap_model)
+
+# Combinar resultados en una tabla
+all_results3 <- bind_rows(
+  mutate(syp500_stats, Variable = "S&P 500"),
+  mutate(nasdaq_stats, Variable = "NASDAQ"),
+  mutate(btc_dom_stats, Variable = "BTC Dominance"),
+  mutate(fg_index_stats, Variable = "Fear & Greed Index"),
+  mutate(market_cap_stats, Variable = "Market Cap")
+) 
+
+# Redondear todas las columnas numéricas a 4 decimales
+all_results3 <- all_results3 %>% mutate(across(where(is.numeric), ~round(., 4)))
+
+# Si 'p_value' es el nombre de la columna de valores p, redondear la columna p_value a 4 decimales
+# y asegurarse de que los valores pequeños no se redondeen a 0.
+all_results3 <- all_results3 %>% mutate(p_value = ifelse(p_value < 0.0001, format(p_value, scientific = TRUE), round(p_value, 4)))
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+print(combined_plot_lm)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+print(kable(all_results3, format = "markdown"))
+```
+
+En las regresiones con *Bitcoin* como base, se observa que todas las *métricas del sector cripto* tienen una **fuerte relacion lineal con una baja dispersión**. El caso más llamativo el de la *dominancia de Bitcoin*, siendo que a mas dinero del sector entre a *Bitcoin*, su precio tiende a subir, caso similar al de la capitalización de mercado.
+
+Los *mercados tradicionales*, si bien se puede decir que tienen una relacion positiva significativa, presentan una mayor dispersión , y con comportamientos prácticamente iguales entre si.
+
+Es posible determinar que Bitcoin tiene **una relacion lineal positiva y significativa** con las variables utilizadas.
+
+En cuanto a las regresiones con `ETH` como base, se obtiene los siguientes resultados:
+
+```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+# Crear gráfico combinado con facet_grid
+all_data_lm_eth <- bind_rows(
+  mutate(eth_w_lbtc, variable = "BTC", x = BTC),
+  mutate(eth_w_ldom, variable = "BTC Dominance", x = btc_dom),
+  mutate(eth_w_lfgi, variable = "Fear & Greed Index", x = fg_index),
+  mutate(eth_w_lmcap, variable = "Market Cap", x = market_cap)
+)
+
+combined_plot_lm_eth <- ggplot(all_data_lm_eth, aes(x = x, y = ETH)) +
+  geom_point() +
+  geom_smooth(method = "lm", color = "red") +
+  facet_grid(. ~ variable, scales = "free_x", ) +
+  labs(title = "ETH vs Variables Independientes",
+       x = "Variable Independiente",
+       y = "ETH")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+btc_model <- lm(ETH ~ BTC, data = eth_w_lbtc)
+btc_stats <- get_regression_stats(btc_model)
+
+# Regresión para BTC Dominance
+eth_dom_model <- lm(ETH ~ btc_dom, data = eth_w_ldom)
+eth_btc_dom_stats <- get_regression_stats(eth_dom_model)
+
+# Regresión para Fear & Greed Index
+eth_fg_index_model <- lm(ETH ~ fg_index, data = eth_w_lfgi)
+eth_fg_index_stats <- get_regression_stats(eth_fg_index_model)
+
+# Regresión para Market Cap
+eth_market_cap_model <- lm(ETH ~ market_cap, data = eth_w_lmcap)
+eth_market_cap_stats <- get_regression_stats(eth_market_cap_model)
+
+
+
+# Combinar resultados en una tabla
+all_results3_eth <- bind_rows(
+  mutate(btc_stats, Variable = "BTC"),
+  mutate(eth_btc_dom_stats, Variable = "BTC Dominance"),
+  mutate(eth_fg_index_stats, Variable = "Fear & Greed Index"),
+  mutate(eth_market_cap_stats, Variable = "Market Cap")
+) 
+
+# Redondear todas las columnas numéricas a 4 decimales
+all_results3_eth <- all_results3_eth %>% mutate(across(where(is.numeric), ~round(., 4)))
+
+# Si 'p_value' es el nombre de la columna de valores p, redondear la columna p_value a 4 decimales
+# y asegurarse de que los valores pequeños no se redondeen a 0.
+all_results3_eth <- all_results3_eth %>% mutate(p_value = ifelse(p_value < 0.0001, format(p_value, scientific = TRUE), round(p_value, 4)))
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+print(combined_plot_lm_eth)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+print(kable(all_results3_eth, format = "markdown"))
+```
+
+Es posible observar una relacion positiva en todas las variables, siendo el caso mas destacable la capitalización de mercado con el poder explicativo más grande, mientras que la variable con el menor poder explicativo es el Fear y Greed Index.
+
+Existe una fuerte relacion con una relativamente baja dispersión entre Bitcoin y Ethereum, siendo congruente con el comportamiento del precio entre ambos activos.
+
+El caso de la dominancia de bitcoin es desconcertante, puesto que una relacion lineal, aunque con una dispersión relativamente mas grande, implicaría que a mayor es la proporcion de dinero que entra a Bitcoin respecto al resto de las criptomonedas mayor seria el precio de Ethereum, suceso que no es posible al largo plazo.
+
+Es posible determinar que Ethereum tiene **una relacion lineal positiva y significativa** con las variables utilizadas.
+
+### Puntos a destacar
+
+Para mejorar el análisis en futuras ramas de investigación se recomienda el utilizar técnicas de medición de la cointegración entre las variables, o la implementación de métodos de prueba de causalidad no lineal, además de tomar en cuenta la existencia de factores externos que pueden influir en los activos de manera simultanea, buscando así obtener una imagen más completa de las fuerzas que conforman al mercado.
+
+De igual forma es necesario realizar mas pruebas respecto a la relacion lineal que puedan tener las variables, pues se presentan inconsistencias en algunos de los resultados.
+
+Otra posible fuente para próximas investigaciones es la aplicación de metodologías para medir la transmisión de volatilidad entre los diversos activos, ya no solo de los analizados en el presente documento, sino incluir un mayor numero de activos y muestras para una medición mas completa.
+
+## Bibliografía
+
+*Capitalización de mercado*. (2024, 14 mayo). Hablemos de Bolsa. <https://blog.bmv.com.mx/glossary/capitalizacion-de-mercado/>
+
+*Crypto Fear & Greed Index \| Bitcoin Sentiment \| Binance*. (s. f.). Binance Square. <https://www.binance.com/en/square/fear-and-greed-index>
+
+Eric. (2021, 29 junio). *Introduction to Granger Causality \| Aptech*. <https://www.aptech.com/blog/introduction-to-granger-causality/#:~:text=Granger%20causality%20is%20an%20econometric,for%20forecasting%20the%20other%20variable.>
+
+*Gráfico dominio Bitcoin: BTC.D — TradingView*. (s. f.). TradingView. <https://es.tradingview.com/symbols/BTC.D/>
+
+*Gráficos y Datos del Mercado de Criptomonedas en Tiempo Real \| CoinMarketCap*. (s. f.). CoinMarketCap. <https://coinmarketcap.com/es/charts/>
+
+*Granger causality test for values above a threshold in time series . . .* (s. f.). <https://la.mathworks.com/matlabcentral/answers/2011182-granger-causality-test-for-values-above-a-threshold-in-time-series-data>
+
+Saavedra, J. A. (2023, 3 mayo). *Regresión Lineal: teoría y ejemplos*. Ebac. <https://ebac.mx/blog/regreson-lineal>
+
+*Top-40 crypto perpetuals hourly prices*. (2024, 6 junio). Kaggle. <https://www.kaggle.com/datasets/hsergeyfrolov/top-40-crypto-perpetuals-hourly-prices>
