@@ -5,12 +5,6 @@ library(lubridate)
 library(scales)
 library(ggthemes)
 
-xts_to_dataframe <- function(data) {
-  data <- as.data.frame(data) %>% rownames_to_column(var="date")
-  data$date <- as.Date(data$date, format = "%Y-%m-%d")
-  return(data)
-}
-
 # Download Gold and Dollar index data
 dxy <- getSymbols("DX-Y.NYB", src = "yahoo", from = "2000-01-20", auto.assign = F)
 gold <- getSymbols("GC=F", src = "yahoo", from = "2000-01-20", auto.assign = F)
@@ -21,8 +15,6 @@ colnames(data) <- c("DXY", "Gold")
 data <- data[!is.na(data$DXY) & !is.na(data$Gold),]
 
 scale_factor <- 20
-
-data1 <- xts_to_dataframe(data)
 
 
 
