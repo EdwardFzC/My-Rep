@@ -38,8 +38,7 @@ get_closest_value <- function(date, data) {
   closest_date <- data[which.min(abs(difftime(index(data), date))),]
   return(as.numeric(closest_date))
 }
-?wich.min
-?difftime
+
 
 # Añadir valores de inicio y fin para DXY y Gold
 presidents$DXY_Start <- sapply(presidents$Start, function(date) get_closest_value(date, data[,"DXY"]))
@@ -83,7 +82,7 @@ ggplot() +
     title = "Gold Price vs Dollar Index (2000-2024)",
     subtitle = "Comparison across U.S. Presidential Terms",
     x = "Year",
-    caption = "Data source: Yahoo Finance"
+    caption = "Data source: Yahoo Finance | Author: @eduardofzc",
   ) +
   theme_fivethirtyeight() +
   theme(
@@ -109,3 +108,4 @@ ggplot() +
                                    label = sprintf("DXY: %.1f%%\nGold: %.1f%%", 
                                                    DXY_Change, Gold_Change)),
             vjust = 1, size = 2.5, fontface = "bold")
+  
