@@ -8,7 +8,7 @@
 
 ####### LIBRERIAS #########
 library(readr)
-library(plotly)
+library(ggplot2)
 library(xts)
 library(reshape2)
 library(gtools)
@@ -29,7 +29,7 @@ options(scipen=999)
     # DATOS CRYPTO
 
 # Lectura de datos
-data_raw <- read_csv("1Weas/Github/My-Rep/Cry/40 criptos ¿tesis/crypto.csv/crypto.csv")
+data_raw <- read_csv("crypto.csv/crypto.csv")
 
 # Filtrar los datos entre 31 de diciembre de 2020 a las 23:00 y la fecha más reciente
 data_raw$date <- as.POSIXct(data_raw$date, format="%d/%m/%Y %H:%M") # cosa rara se establece formato al revés
@@ -124,6 +124,7 @@ data_close_h <- data %>% select(date, contains("close"))
 data_vol_h <- data %>% select(date, contains("volume"))
 
 data_log_h <- calc_log_returns(data_close_h)
+colnames(data_log_h) <- get_assets(data_close_h, "USDT_close")
 
 # Obtener el nombre de los activos usados
 assets <- get_assets(data_close_h, "USDT_close")
@@ -209,9 +210,9 @@ all_lcrends2 <- xts_to_dataframe(all_lcrends)
 
 ######## VARIABLES CRY ########
 # PREPARAR OTROS DATOS CRYPTO
-btc_dom <- read_csv("1Weas/Github/My-Rep/Cry/40 criptos ¿tesis/btc_dominance.csv")
-fear_greed_index <- read_csv("1Weas/Github/My-Rep/Cry/40 criptos ¿tesis/fear_greed_index.csv")
-market_cap <- read_csv("1Weas/Github/My-Rep/Cry/40 criptos ¿tesis/market_cap.csv")
+btc_dom <- read_csv("1Weas/Github/My-Rep/Cry/40 criptos analisis/btc_dominance.csv")
+fear_greed_index <- read_csv("1Weas/Github/My-Rep/Cry/40 criptos analisis/fear_greed_index.csv")
+market_cap <- read_csv("1Weas/Github/My-Rep/Cry/40 criptos analisis/market_cap.csv")
 
 btc_dom <- rename(btc_dom, date = DateTime, btc_dom = BTC)
 fear_greed_index <- rename(fear_greed_index, date = DateTime, fg_index = "Fear & greed index" )
@@ -395,7 +396,7 @@ granger_test_temporal_graficas <- function(data, var_causa, var_efecto, ventana 
 
 granger_test_temporal_graficas(all_lcrends2, "nasdaq", "BTC", ventana = 30)
 
-
+granger_test_temporal_graficas(data_log_h, "BTC", "ETH", ventana = 24)
 ####COMO INDICE#### 
 
 
@@ -442,17 +443,18 @@ calcular_indice_impacto <- function(data, var_causa, var_efecto, ventana = 30) {
 }
 
 # Ejemplo de uso
-resultados <- calcular_indice_impacto(all_lcrends2, "syp500", "BTC", ventana = 30)
-resultados$date <- all_lcrends2$Date %>% as.Date()
+resultados <- calcular_indice_impacto(data_log_h, "BTC", "ETH", ventana = 24)
+resultados$date <- data_log_h$date
 
 # Crear el gráfico
 ggplot(resultados, aes(x = date, y = indice_impacto)) +
   geom_line() +
   geom_hline(yintercept = 0, linetype = "dashed", color = "red") +
-  labs(title = "Índice de Impacto: SP500 vs BTC",
+  labs(title = "Índice de Impacto: BTC sobre ETH",
+       subtitle = "Ventana Movil = 24h",
        x = "Tiempo",
        y = "Índice de Impacto",
-       caption = "Valores positivos: SP500 impacta más a BTC\nValores negativos: BTC impacta más a SP500") +
+       caption = "Valores positivos: BTC impacta más a ETH\nValores negativos: ETH impacta más a BTC") +
   theme_minimal()
 
 # Resumen de los resultados
