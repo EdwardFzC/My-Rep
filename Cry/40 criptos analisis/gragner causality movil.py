@@ -5,13 +5,16 @@ from statsmodels.tsa.stattools import grangercausalitytests
 from datetime import datetime, timedelta
 import matplotlib.dates as mdates
 import seaborn as sns
+import io
+from contextlib import redirect_stdout
+from matplotlib.colors import LinearSegmentedColormap
 
 
 # Función para calcular el test de Granger a lo largo del tiempo
 def calcular_granger_temporal(data, var_causa, var_efecto, ventana=30, lag = 1):
     n = len(data)
     resultados = pd.DataFrame({
-        'fecha': range(n),
+        'date': pd.to_datetime(data.index),
         'p_value': [np.nan] * n
     })
 
@@ -22,8 +25,48 @@ def calcular_granger_temporal(data, var_causa, var_efecto, ventana=30, lag = 1):
             resultados.loc[i, 'p_value'] = test[1][0]['ssr_ftest'][1]
         except Exception as e:
             print(f"Error en el cálculo de Granger para el punto {i}: {str(e)}")
-    resultados['date'] = pd.to_datetime(data.index)
     return resultados
+
+
+def calcular_granger_temporal_indicador(data, var1, var2, ventana=30, lag=1, max_val=2):
+    n = len(data)
+    resultados = pd.DataFrame({
+        'date': pd.to_datetime(data.index),
+        'p_value_1_2': [np.nan] * n,
+        'p_value_2_1': [np.nan] * n,
+        'indicador_1_2': [np.nan] * n,
+        'indicador_2_1': [np.nan] * n
+    })
+    
+    def impacto(p, max_val):
+        return np.where(p <= 0.05, 1 + ((0.05 - p) / 0.05) * (max_val - 1), 1 - (p - 0.05))
+    
+    for i in range(ventana, n):
+        subset_data = data.iloc[i - ventana + 1:i + 1]
+        try:
+            # Test de var1 causando var2
+            test_1_2 = grangercausalitytests(subset_data[[var2, var1]], maxlag=[lag])
+            p_value_1_2 = test_1_2[lag][0]['ssr_ftest'][1]
+            
+            # Test de var2 causando var1
+            test_2_1 = grangercausalitytests(subset_data[[var1, var2]], maxlag=[lag])
+            p_value_2_1 = test_2_1[lag][0]['ssr_ftest'][1]
+            
+            resultados.loc[i, 'p_value_1_2'] = p_value_1_2
+            resultados.loc[i, 'p_value_2_1'] = p_value_2_1
+            
+            # Cálculo de los indicadores
+            resultados.loc[i, 'indicador_1_2'] = impacto(p_value_1_2, max_val)
+            resultados.loc[i, 'indicador_2_1'] = impacto(p_value_2_1, max_val)
+        
+        except Exception as e:
+            print(f"Error en el cálculo de Granger para el punto {i}: {str(e)}")
+    
+    return resultados
+
+
+
+
 
 
 """def graficar_granger_test(data, var_causa, var_efecto, ventana=30):
