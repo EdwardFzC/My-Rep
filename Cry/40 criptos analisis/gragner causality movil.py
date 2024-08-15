@@ -11,7 +11,7 @@ from matplotlib.colors import LinearSegmentedColormap
 
 
 # Función para calcular el test de Granger a lo largo del tiempo
-def calcular_granger_temporal(data, var_causa, var_efecto, ventana=30, lag = 1):
+def granger_window_test(data, var_causa, var_efecto, ventana=30, lag = 1):
     n = len(data)
     resultados = pd.DataFrame({
         'date': pd.to_datetime(data.index),
@@ -27,8 +27,13 @@ def calcular_granger_temporal(data, var_causa, var_efecto, ventana=30, lag = 1):
             print(f"Error en el cálculo de Granger para el punto {i}: {str(e)}")
     return resultados
 
+def granger_index(data, max_val=10):
+    def impacto(p, max_val):
+        return np.where(p <= 0.05, 1 + ((0.05 - p) / 0.05) * (max_val - 1), 1 - (p - 0.05))
+    data['index'] = impacto(data['p_value'], max_val)
+    return data
 
-def calcular_granger_temporal_indicador(data, var1, var2, ventana=30, lag=1, max_val=2):
+def granger_window_comparation_index(data, var1, var2, ventana=30, lag=1, max_val=10):
     n = len(data)
     resultados = pd.DataFrame({
         'date': pd.to_datetime(data.index),
@@ -65,10 +70,6 @@ def calcular_granger_temporal_indicador(data, var1, var2, ventana=30, lag=1, max
     return resultados
 
 
-
-
-
-
 """def graficar_granger_test(data, var_causa, var_efecto, ventana=30):
     resultados = data.dropna()
 
@@ -85,7 +86,6 @@ def calcular_granger_temporal_indicador(data, var1, var2, ventana=30, lag=1, max
     plt.legend(['', 'Influencia Potencial (p < 0.05)'], loc='lower center', bbox_to_anchor=(0.5, -0.15))
     plt.tight_layout()
     return plt"""
-
 
 def graficar_granger_test(data, var_causa, var_efecto, ventana=30):
     resultados = data.dropna()
@@ -144,23 +144,26 @@ def graficar_granger_test(data, var_causa, var_efecto, ventana=30):
     
     return fig
 
+
+
+
+
+
 def granger_test_temporal_graficas(data, var_causa, var_efecto, ventana=30):
     resultados = calcular_granger_temporal(data, var_causa, var_efecto, ventana)
     plot = graficar_granger_test(resultados, var_causa, var_efecto, ventana)
     return plot
 
-def calcular_rendimientos_logaritmicos(data):
-    # Asegúrate de que la primera columna sea de tipo datetime
-    data.iloc[:, 0] = pd.to_datetime(data.iloc[:, 0])
-
-    # Calculamos los rendimientos logarítmicos
-    # Tomamos el logaritmo de los valores y luego restamos el logaritmo de los valores anteriores
-    data_rlog = data.iloc[:, 1:].apply(lambda x: np.log(x / x.shift(1)))
-
-    # Añadir la columna de fechas para que no se pierda
-    data_rlog.insert(0, 'date', data.iloc[:, 0])
+def calcular_rendimientos_logaritmicos(data, date_column = "date", date_format='%d/%m/%Y'):
+    # Verificar si la primera columna es 'date' y si no es el índice
+    if data.columns[0] == date_column and data.index.name != date_column:
+        # Asegurarse de que la primera columna sea de tipo datetime
+        data['date'] = pd.to_datetime(data['date'], format=date_format)
+        data.set_index(date_column, inplace=True)
+    
+    data_rlog = np.log(data / data.shift(1))
     data_rlog = data_rlog.dropna()
-    data_rlog= data_rlog.set_index('date')
+    
     return data_rlog
 
 
