@@ -115,9 +115,7 @@ def graficar_frontera(data, resultados):
     ax.set_ylabel('Rendimiento')
     
     plt.show()
-    
-    
-graficar_frontera(data, resultados)
+
 
 
 
