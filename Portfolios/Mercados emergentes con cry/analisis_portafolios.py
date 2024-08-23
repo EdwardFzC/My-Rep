@@ -5,7 +5,6 @@ import seaborn as sns
 import yfinance as yf
 from pypfopt import EfficientFrontier, expected_returns
 from pypfopt import risk_models
-from pypfopt import plotting
 import quantstats as qs
 
 
@@ -36,11 +35,11 @@ emerging_markets = yf.download(tk_emerging_markets, start=start)['Adj Close']
 emerging_markets.columns = ['MEX', 'BRA', 'CHN', 'IND', 'RUS', 'TUR', 'COL', 'ARG', 'TWN', 'KOR', 'ZAF', 'IDN', 'THA', 'MYS', 'PHL', 'POL', 'HUN', 'CHL', 'PER', 'EGY']
 emerging_markets.head()
 
-
+rcripto = rlog(cripto)
 
 # funcion rendimientos log
 def rlog(data):
-    return np.log(data/data.shift(1)).dropna()
+	return np.log(data/data.shift(1)).dropna()
 
 # Funcion rendimientos pct
 def pct(data):
@@ -91,30 +90,6 @@ def portafolio(data, nombre):
         },
         "nombre": nombre
     }
-
-# Frontera eficiente
-def graficar_frontera(data, resultados):
-    mu = expected_returns.mean_historical_return(data)
-    S = risk_models.sample_cov(data)
-    
-    ef = EfficientFrontier(mu, S)
-    fig, ax = plt.subplots()
-    
-    # Graficar la frontera eficiente
-    plotting.plot_efficient_frontier(ef, ax=ax, show_assets=False)
-    
-    # Añadir los puntos de los portafolios óptimos
-    ax.scatter(resultados['max_sharpe']['performance'][1], resultados['max_sharpe']['performance'][0], marker='*', color='r', s=100, label='Máximo Sharpe')
-    ax.scatter(resultados['min_volatility']['performance'][1], resultados['min_volatility']['performance'][0], marker='*', color='g', s=100, label='Mínima Volatilidad')
-    ax.scatter(resultados['max_return']['performance'][1], resultados['max_return']['performance'][0], marker='*', color='b', s=100, label='Máximo Rendimiento')
-    
-    # Añadir leyenda y etiquetas
-    ax.legend()
-    ax.set_title('Frontera Eficiente con Portafolios Óptimos')
-    ax.set_xlabel('Volatilidad')
-    ax.set_ylabel('Rendimiento')
-    
-    plt.show()
 
 
 
@@ -193,3 +168,4 @@ def key_metrics(data):
 
 
 cry_port = portafolio(cripto, 'Criptomonedas')
+
